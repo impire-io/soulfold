@@ -22,7 +22,7 @@ import (
 	gooidc "github.com/coreos/go-oidc/v3/oidc"
 	"golang.org/x/oauth2"
 
-	"github.com/impire-io/soulfold/internal/passkeys/authtest"
+	"github.com/impire-io/soulfold/authtest"
 	"github.com/impire-io/soulfold/internal/serve"
 	"github.com/impire-io/soulfold/internal/store"
 )

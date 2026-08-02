@@ -32,13 +32,19 @@ const (
 type storage struct {
 	St   *store.Store
 	Keys *keys.Service
+	// audience is the deployment's fixed token audience (the door AS
+	// contract §3: every client's token carries it) — empty means
+	// client-id-only audiences, the plain-RP default.
+	audience string
 }
 
 var _ op.Storage = (*storage)(nil)
 
 // New assembles the zitadel provider on the store and key lifecycle.
-func New(issuer string, st *store.Store, ks *keys.Service) (*op.Provider, error) {
-	s := &storage{St: st, Keys: ks}
+// audience, when set, joins every token's aud alongside the client id —
+// the fixed value a resource deployment validates.
+func New(issuer, audience string, st *store.Store, ks *keys.Service) (*op.Provider, error) {
+	s := &storage{St: st, Keys: ks, audience: audience}
 	var cryptoKey [32]byte
 	if _, err := rand.Read(cryptoKey[:]); err != nil {
 		return nil, fmt.Errorf("provider: crypto key: %w", err)
@@ -77,7 +83,7 @@ func (s *storage) CreateAuthRequest(ctx context.Context, r *oidc.AuthRequest, us
 	if _, err := s.St.Create(ctx, s.St.Sessions, rec.ID, rec); err != nil {
 		return nil, err
 	}
-	return &authRequest{s: rec}, nil
+	return &authRequest{s: rec, extraAud: s.audience}, nil
 }
 
 func (s *storage) AuthRequestByID(ctx context.Context, id string) (op.AuthRequest, error) {
@@ -85,7 +91,7 @@ func (s *storage) AuthRequestByID(ctx context.Context, id string) (op.AuthReques
 	if _, err := s.St.Get(ctx, s.St.Sessions, id, &rec); err != nil {
 		return nil, fmt.Errorf("provider: auth request %s: %w", id, err)
 	}
-	return &authRequest{s: rec}, nil
+	return &authRequest{s: rec, extraAud: s.audience}, nil
 }
 
 // AuthRequestByCode redeems the digested single-use code index; the CAS

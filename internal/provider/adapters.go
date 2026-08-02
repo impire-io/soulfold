@@ -15,13 +15,22 @@ import (
 	"github.com/impire-io/soulfold/internal/store"
 )
 
-// authRequest answers op.AuthRequest from the session record.
-type authRequest struct{ s store.Session }
+// authRequest answers op.AuthRequest from the session record. extraAud
+// is the deployment's fixed audience (empty: client-id only).
+type authRequest struct {
+	s        store.Session
+	extraAud string
+}
 
-func (a *authRequest) GetID() string         { return a.s.ID }
-func (a *authRequest) GetACR() string        { return "" }
-func (a *authRequest) GetAMR() []string      { return nil }
-func (a *authRequest) GetAudience() []string { return []string{a.s.ClientID} }
+func (a *authRequest) GetID() string    { return a.s.ID }
+func (a *authRequest) GetACR() string   { return "" }
+func (a *authRequest) GetAMR() []string { return nil }
+func (a *authRequest) GetAudience() []string {
+	if a.extraAud != "" && a.extraAud != a.s.ClientID {
+		return []string{a.s.ClientID, a.extraAud}
+	}
+	return []string{a.s.ClientID}
+}
 func (a *authRequest) GetAuthTime() time.Time {
 	t, err := time.Parse(time.RFC3339, a.s.AuthTime)
 	if err != nil {

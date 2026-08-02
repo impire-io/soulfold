@@ -10,6 +10,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"strings"
 	"time"
@@ -211,3 +212,10 @@ func RandID(n int) string {
 
 // Now returns the store's canonical timestamp form.
 func Now() string { return time.Now().UTC().Format(time.RFC3339) }
+
+// IsAlreadyExists reports whether err is the Create refusal of a key
+// that already holds a record (D4's duplicate-is-an-error, for callers
+// that deliberately tolerate it, e.g. idempotent seeding).
+func IsAlreadyExists(err error) bool {
+	return errors.Is(err, jetstream.ErrKeyExists)
+}

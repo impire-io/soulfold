@@ -47,6 +47,15 @@ type Options struct {
 	NATSURL string
 	// BucketPrefix overrides the default bucket prefix (D1).
 	BucketPrefix string
+	// TokenAudience, when set, joins every issued token's aud alongside
+	// the client id — the fixed value a resource deployment (the door
+	// AS contract §3) validates. Empty keeps the plain-RP default.
+	TokenAudience string
+	// EnableDCR serves RFC 7591 dynamic client registration at
+	// /register (public clients, PKCE): what hosted MCP clients expect
+	// of an authorization server. Off by default — a plain RP
+	// deployment registers its clients deliberately.
+	EnableDCR bool
 }
 
 // Fold is a running instance.
@@ -110,7 +119,7 @@ func Open(ctx context.Context, opts Options) (*Fold, error) {
 		return nil, err
 	}
 
-	p, err := provider.New(opts.Issuer, st, f.Keys)
+	p, err := provider.New(opts.Issuer, opts.TokenAudience, st, f.Keys)
 	if err != nil {
 		f.Close()
 		return nil, err
@@ -124,6 +133,9 @@ func Open(ctx context.Context, opts Options) (*Fold, error) {
 	mux.Handle("/", p)
 	uiHandler := &ui.Handler{St: st, Passkeys: pk, Issuer: issuerURL, Callback: op.AuthCallbackURL(p)}
 	uiHandler.Register(mux)
+	if opts.EnableDCR {
+		registerDCR(mux, p, opts.Issuer, st)
+	}
 
 	listen := opts.Listen
 	if listen == "" {
