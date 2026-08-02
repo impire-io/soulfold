@@ -22,6 +22,11 @@ type User struct {
 	// Credentials is the user's enrolled passkeys, serialized
 	// go-webauthn credential records (public material only).
 	Credentials []json.RawMessage `json:"credentials,omitempty"`
+	// Roles surface as the token's roles-claim values (constitution
+	// II: they *name* roles declared on the consumer's side — Entra's
+	// app-role shape — and never carry permissions). M3's groups will
+	// populate this from membership; until then seeding does.
+	Roles []string `json:"roles,omitempty"`
 }
 
 // Client is a registered OAuth client. M1 clients are public-with-PKCE;

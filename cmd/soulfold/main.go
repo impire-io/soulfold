@@ -84,6 +84,7 @@ func cmdSeed(args []string) error {
 	natsURL := fs.String("nats-url", "", "external JetStream server (default: embedded)")
 	username := fs.String("username", "", "username to seed (seed user)")
 	displayName := fs.String("display-name", "", "display name (seed user)")
+	roles := fs.String("roles", "", "comma-separated roles-claim values (seed user)")
 	clientID := fs.String("client-id", "", "client id to seed (seed client)")
 	name := fs.String("name", "", "client display name (seed client)")
 	redirectURIs := fs.String("redirect-uri", "", "comma-separated redirect URIs (seed client)")
@@ -106,7 +107,11 @@ func cmdSeed(args []string) error {
 		if *username == "" {
 			return fmt.Errorf("seed user: --username is required")
 		}
-		u, err := serve.SeedUser(ctx, f.Store, *username, *displayName)
+		var roleList []string
+		if *roles != "" {
+			roleList = strings.Split(*roles, ",")
+		}
+		u, err := serve.SeedUser(ctx, f.Store, *username, *displayName, roleList...)
 		if err != nil {
 			return err
 		}

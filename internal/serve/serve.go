@@ -192,12 +192,12 @@ func (f *Fold) Close() {
 
 // SeedUser creates the M1 stand-in user (roadmap: "a seeded user and
 // client standing in for the ceremonies"; M3 replaces seeding with the
-// lifecycle).
-func SeedUser(ctx context.Context, st *store.Store, username, displayName string) (store.User, error) {
+// lifecycle). Roles surface as the token's roles-claim values.
+func SeedUser(ctx context.Context, st *store.Store, username, displayName string, roles ...string) (store.User, error) {
 	now := store.Now()
 	u := store.User{
 		Schema: 1, ID: "u_" + store.RandID(8), Username: username,
-		DisplayName: displayName, Status: "active",
+		DisplayName: displayName, Status: "active", Roles: roles,
 		CreatedAt: now, UpdatedAt: now,
 	}
 	if _, err := st.Create(ctx, st.Users, u.ID, u); err != nil {
