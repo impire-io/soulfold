@@ -190,6 +190,9 @@ func UsernameIndexKey(username string) string {
 // BrowserSessionKey namespaces browser-session records (D11).
 func BrowserSessionKey(id string) string { return "bs_" + id }
 
+// CeremonyKey namespaces in-flight WebAuthn ceremony records (M2).
+func CeremonyKey(id string) string { return "wa_" + id }
+
 // SigningKeyKey addresses a signing-key record; ActivePointerKey is the
 // CAS-flipped pointer (D7).
 func SigningKeyKey(kid string) string { return "key." + kid }

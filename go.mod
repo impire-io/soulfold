@@ -4,7 +4,9 @@ go 1.26.2
 
 require (
 	github.com/coreos/go-oidc/v3 v3.20.0
+	github.com/fxamacker/cbor/v2 v2.9.2
 	github.com/go-jose/go-jose/v4 v4.1.4
+	github.com/go-webauthn/webauthn v0.17.4
 	github.com/nats-io/nats-server/v2 v2.14.4
 	github.com/nats-io/nats.go v1.52.0
 	github.com/nats-io/nkeys v0.4.16
@@ -19,7 +21,11 @@ require (
 	github.com/go-chi/chi/v5 v5.3.1 // indirect
 	github.com/go-logr/logr v1.4.3 // indirect
 	github.com/go-logr/stdr v1.2.2 // indirect
+	github.com/go-viper/mapstructure/v2 v2.5.0 // indirect
+	github.com/go-webauthn/x v0.2.6 // indirect
+	github.com/golang-jwt/jwt/v5 v5.3.1 // indirect
 	github.com/google/go-tpm v0.9.8 // indirect
+	github.com/google/uuid v1.6.0 // indirect
 	github.com/gorilla/securecookie v1.1.2 // indirect
 	github.com/klauspost/compress v1.19.0 // indirect
 	github.com/minio/highwayhash v1.0.4 // indirect
@@ -27,7 +33,10 @@ require (
 	github.com/muhlemmer/httpforwarded v0.1.0 // indirect
 	github.com/nats-io/jwt/v2 v2.8.2 // indirect
 	github.com/nats-io/nuid v1.0.1 // indirect
+	github.com/philhofer/fwd v1.2.0 // indirect
 	github.com/rs/cors v1.11.1 // indirect
+	github.com/tinylib/msgp v1.6.4 // indirect
+	github.com/x448/float16 v0.8.4 // indirect
 	github.com/zitadel/schema v1.3.2 // indirect
 	go.opentelemetry.io/auto/sdk v1.2.1 // indirect
 	go.opentelemetry.io/otel v1.44.0 // indirect

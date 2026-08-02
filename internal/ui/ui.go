@@ -1,19 +1,23 @@
 // Package ui is the sign-in surface (design D9–D14): exactly two
-// server-rendered pages — login and error — zero JavaScript in M1, the
-// one-shot CSRF token and the Origin outer wall on every state-changing
-// POST (D13), flow state in KV records with the cookie naming exactly
-// one of them (D11).
+// server-rendered pages — login and error — with page-local JavaScript
+// only where a ceremony demands it (M2's WebAuthn calls; nothing else),
+// the one-shot CSRF token and the Origin outer wall on state-changing
+// POSTs (D13), flow state in KV records with the cookie naming exactly
+// one of them (D11). Since M2 the only way through is a passkey
+// ceremony — the passkey-only rule is enforced behavior, not policy
+// (constitution I).
 package ui
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
-	"fmt"
 	"html/template"
 	"net/http"
 	"net/url"
 	"time"
 
+	"github.com/impire-io/soulfold/internal/passkeys"
 	"github.com/impire-io/soulfold/internal/store"
 )
 
@@ -24,34 +28,85 @@ const BrowserSessionLifetime = 12 * time.Hour
 const CookieName = "sf_session"
 
 var (
+	// The login page: a username field and the ceremony driver. The
+	// script is page-local and exists because navigator.credentials is
+	// unreachable without it (D9's stated exception).
 	loginTmpl = template.Must(template.New("login").Parse(`<!doctype html>
 <meta charset="utf-8"><title>sign in — soulfold</title>
 <main><h1>Sign in</h1>
-<form method="post" action="/login/">
-<input type="hidden" name="authRequestID" value="{{.AuthRequestID}}">
-<input type="hidden" name="csrf" value="{{.CSRF}}">
-<label>Username <input name="username" autocomplete="username" autofocus required></label>
-<button type="submit">Sign in</button>
-</form></main>`))
+<form id="f">
+<input type="hidden" id="authRequestID" value="{{.AuthRequestID}}">
+<input type="hidden" id="csrf" value="{{.CSRF}}">
+<label>Username <input id="username" autocomplete="username webauthn" autofocus required></label>
+<button type="submit">Sign in with a passkey</button>
+</form>
+<p id="msg"></p>
+<script>
+const b64u = {
+  dec: s => Uint8Array.from(atob(s.replace(/-/g,'+').replace(/_/g,'/')), c => c.charCodeAt(0)),
+  enc: b => btoa(String.fromCharCode(...new Uint8Array(b))).replace(/\+/g,'-').replace(/\//g,'_').replace(/=+$/,''),
+};
+document.getElementById('f').addEventListener('submit', async ev => {
+  ev.preventDefault();
+  const msg = document.getElementById('msg');
+  try {
+    const q = new URLSearchParams({
+      authRequestID: document.getElementById('authRequestID').value,
+      csrf: document.getElementById('csrf').value,
+      username: document.getElementById('username').value,
+    });
+    const beginResp = await fetch('/login/begin?' + q, {method: 'POST'});
+    if (!beginResp.ok) throw new Error(await beginResp.text());
+    const begin = await beginResp.json();
+    const pk = begin.options.publicKey;
+    pk.challenge = b64u.dec(pk.challenge);
+    if (pk.user) pk.user.id = b64u.dec(pk.user.id);
+    for (const list of [pk.allowCredentials, pk.excludeCredentials])
+      if (list) list.forEach(c => c.id = b64u.dec(c.id));
+    let body;
+    if (begin.kind === 'register') {
+      const cred = await navigator.credentials.create({publicKey: pk});
+      body = {id: cred.id, rawId: b64u.enc(cred.rawId), type: cred.type, response: {
+        attestationObject: b64u.enc(cred.response.attestationObject),
+        clientDataJSON: b64u.enc(cred.response.clientDataJSON)}};
+    } else {
+      const cred = await navigator.credentials.get({publicKey: pk});
+      body = {id: cred.id, rawId: b64u.enc(cred.rawId), type: cred.type, response: {
+        authenticatorData: b64u.enc(cred.response.authenticatorData),
+        clientDataJSON: b64u.enc(cred.response.clientDataJSON),
+        signature: b64u.enc(cred.response.signature),
+        userHandle: cred.response.userHandle ? b64u.enc(cred.response.userHandle) : null}};
+    }
+    q.set('ceremonyID', begin.ceremonyID);
+    const fin = await fetch('/login/finish?' + q, {method: 'POST',
+      headers: {'Content-Type': 'application/json'}, body: JSON.stringify(body)});
+    if (!fin.ok) throw new Error(await fin.text());
+    window.location = (await fin.json()).redirect;
+  } catch (e) { msg.textContent = 'Sign-in failed: ' + e.message; }
+});
+</script></main>`))
 
 	errorTmpl = template.Must(template.New("error").Parse(`<!doctype html>
 <meta charset="utf-8"><title>error — soulfold</title>
 <main><h1>Sign-in failed</h1><p>{{.Message}}</p></main>`))
 )
 
-// Handler serves the two pages against the store. Callback is
+// Handler serves the sign-in surface against the store. Callback is
 // op.AuthCallbackURL(provider) — the one URL the UI returns users to
 // (D10).
 type Handler struct {
 	St       *store.Store
+	Passkeys *passkeys.Service
 	Issuer   *url.URL
 	Callback func(ctx context.Context, authRequestID string) string
 }
 
-// Register mounts the two routes on mux.
+// Register mounts the surface on mux: the two pages plus the two
+// ceremony endpoints the login page's script drives.
 func (h *Handler) Register(mux *http.ServeMux) {
 	mux.HandleFunc("GET /login/", h.getLogin)
-	mux.HandleFunc("POST /login/", h.postLogin)
+	mux.HandleFunc("POST /login/begin", h.postBegin)
+	mux.HandleFunc("POST /login/finish", h.postFinish)
 }
 
 func (h *Handler) renderError(w http.ResponseWriter, status int, msg string) {
@@ -62,8 +117,9 @@ func (h *Handler) renderError(w http.ResponseWriter, status int, msg string) {
 	}
 }
 
-// getLogin renders the form — or, when a valid browser session already
-// names this person (D11), completes the auth request without a page.
+// getLogin renders the ceremony page — or, when a valid browser
+// session already names this person (D11), completes the auth request
+// without one.
 func (h *Handler) getLogin(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	id := r.URL.Query().Get("authRequestID")
@@ -90,74 +146,85 @@ func (h *Handler) getLogin(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-// postLogin authenticates the M1 seeded-user stub (M2 replaces it with
-// the passkey ceremony) behind the D13 walls: Origin first, then the
-// one-shot CSRF token, cleared on success in the same CAS write that
-// marks the request done.
-func (h *Handler) postLogin(w http.ResponseWriter, r *http.Request) {
-	ctx := r.Context()
+// guard is the D13 wall shared by both ceremony POSTs: Origin first,
+// then the CSRF token compared against the auth-request record. The
+// token is *cleared* only when the request completes (postFinish) —
+// begin creates scratch state, finish changes the flow's.
+func (h *Handler) guard(r *http.Request) (store.Session, uint64, error) {
 	if origin := r.Header.Get("Origin"); origin != "" {
 		if origin != h.Issuer.Scheme+"://"+h.Issuer.Host {
-			h.renderError(w, http.StatusForbidden, "cross-origin request refused")
-			return
+			return store.Session{}, 0, errors.New("cross-origin request refused")
 		}
 	}
-	id := r.FormValue("authRequestID")
-	csrf := r.FormValue("csrf")
-	username := r.FormValue("username")
+	id := r.URL.Query().Get("authRequestID")
+	csrf := r.URL.Query().Get("csrf")
 	if id == "" || csrf == "" {
-		h.renderError(w, http.StatusBadRequest, "missing form fields")
-		return
+		return store.Session{}, 0, errors.New("missing auth request or token")
 	}
-
 	var sess store.Session
-	rev, err := h.St.Get(ctx, h.St.Sessions, id, &sess)
+	rev, err := h.St.Get(r.Context(), h.St.Sessions, id, &sess)
 	if err != nil {
-		h.renderError(w, http.StatusBadRequest, "unknown or expired auth request")
-		return
+		return store.Session{}, 0, errors.New("unknown or expired auth request")
 	}
 	if sess.CSRF == "" || sess.CSRF != csrf {
-		h.renderError(w, http.StatusForbidden, "the form token is missing, stale, or already used")
-		return
+		return store.Session{}, 0, errors.New("the form token is missing, stale, or already used")
 	}
+	return sess, rev, nil
+}
 
-	user, err := h.lookupActiveUser(ctx, username)
+func (h *Handler) postBegin(w http.ResponseWriter, r *http.Request) {
+	sess, _, err := h.guard(r)
 	if err != nil {
-		h.renderError(w, http.StatusUnauthorized, "unknown user")
+		http.Error(w, err.Error(), http.StatusForbidden)
+		return
+	}
+	ceremonyID, kind, options, err := h.Passkeys.Begin(r.Context(), r.URL.Query().Get("username"), sess.ID)
+	if err != nil {
+		http.Error(w, "unknown user", http.StatusUnauthorized)
+		return
+	}
+	w.Header().Set("Content-Type", "application/json")
+	if err := json.NewEncoder(w).Encode(map[string]any{
+		"ceremonyID": ceremonyID, "kind": kind, "options": json.RawMessage(options),
+	}); err != nil {
+		http.Error(w, "encode failed", http.StatusInternalServerError)
+	}
+}
+
+func (h *Handler) postFinish(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	sess, rev, err := h.guard(r)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusForbidden)
+		return
+	}
+	user, boundAuthReq, err := h.Passkeys.Finish(ctx, r.URL.Query().Get("ceremonyID"), r)
+	if err != nil {
+		http.Error(w, "the ceremony failed", http.StatusUnauthorized)
+		return
+	}
+	if boundAuthReq != sess.ID {
+		http.Error(w, "ceremony bound to a different sign-in", http.StatusForbidden)
 		return
 	}
 
-	// One CAS write: consume the token, mark done, bind the subject.
+	// One CAS write completes the flow: consume the one-shot token,
+	// mark done, bind the authenticated subject (D13).
 	sess.CSRF = ""
 	sess.Done = true
 	sess.UserID = user.ID
 	sess.AuthTime = store.Now()
-	if _, err := h.St.Update(ctx, h.St.Sessions, id, sess, rev); err != nil {
-		// Someone else moved the record; the token is spent either way.
-		h.renderError(w, http.StatusConflict, "the sign-in was already completed")
+	if _, err := h.St.Update(ctx, h.St.Sessions, sess.ID, sess, rev); err != nil {
+		http.Error(w, "the sign-in was already completed", http.StatusConflict)
 		return
 	}
-
 	h.setBrowserSession(ctx, w, r, user.ID)
-	http.Redirect(w, r, h.Callback(ctx, id), http.StatusFound)
-}
-
-func (h *Handler) lookupActiveUser(ctx context.Context, username string) (store.User, error) {
-	if username == "" {
-		return store.User{}, errors.New("ui: empty username")
+	w.Header().Set("Content-Type", "application/json")
+	if err := json.NewEncoder(w).Encode(map[string]string{
+		"redirect": h.Callback(ctx, sess.ID),
+	}); err != nil {
+		http.Error(w, "encode failed", http.StatusInternalServerError)
 	}
-	var idx store.Index
-	if _, err := h.St.Get(ctx, h.St.Users, store.UsernameIndexKey(username), &idx); err != nil {
-		return store.User{}, err
-	}
-	var user store.User
-	if _, err := h.St.Get(ctx, h.St.Users, idx.Target, &user); err != nil {
-		return store.User{}, err
-	}
-	if user.Status != "active" {
-		return store.User{}, fmt.Errorf("ui: user %s is %s", user.ID, user.Status)
-	}
-	return user, nil
 }
 
 func (h *Handler) completeAuthRequest(ctx context.Context, id, subject string) error {

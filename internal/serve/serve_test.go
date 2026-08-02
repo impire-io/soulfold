@@ -1,13 +1,15 @@
 package serve_test
 
-// The M1 gate (roadmap + spec 001 SC-001/SC-002): a stock go-oidc RP
-// completes sign-in against the running fold on an embedded
-// nats-server; tokens verify against published JWKS; restarts — mid-flow
-// and full — are invisible; forged POSTs change nothing; the page
-// inventory is exactly {login, error}.
+// The M1+M2 gate (specs 001/002): a stock go-oidc RP completes the
+// passkey sign-in against the running fold on an embedded nats-server;
+// tokens verify against published JWKS; restarts — mid-flow and full —
+// are invisible; forged POSTs change nothing; the page inventory is
+// exactly {login, error}; the only way through is a WebAuthn ceremony.
 
 import (
+	"bytes"
 	"context"
+	"encoding/json"
 	"io"
 	"net"
 	"net/http"
@@ -20,6 +22,7 @@ import (
 	gooidc "github.com/coreos/go-oidc/v3/oidc"
 	"golang.org/x/oauth2"
 
+	"github.com/impire-io/soulfold/internal/passkeys/authtest"
 	"github.com/impire-io/soulfold/internal/serve"
 	"github.com/impire-io/soulfold/internal/store"
 )
@@ -96,6 +99,22 @@ func (b *browser) postForm(t *testing.T, u string, form url.Values, headers map[
 	return resp
 }
 
+// postJSON posts a JSON body (the ceremony finish call).
+func (b *browser) postJSON(t *testing.T, u string, payload []byte) *http.Response {
+	t.Helper()
+	req, err := http.NewRequest(http.MethodPost, u, bytes.NewReader(payload))
+	if err != nil {
+		t.Fatal(err)
+	}
+	req.Header.Set("Content-Type", "application/json")
+	resp, err := b.c.Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	b.record(resp)
+	return resp
+}
+
 func body(t *testing.T, resp *http.Response) string {
 	t.Helper()
 	defer func() { _ = resp.Body.Close() }()
@@ -128,7 +147,7 @@ func reservePort(t *testing.T) string {
 
 func extractField(t *testing.T, page, name string) string {
 	t.Helper()
-	marker := `name="` + name + `" value="`
+	marker := `id="` + name + `" value="`
 	i := strings.Index(page, marker)
 	if i < 0 {
 		t.Fatalf("no %s field in page:\n%s", name, page)
@@ -172,7 +191,53 @@ func TestM1Gate(t *testing.T) {
 	}
 	verifier := rpProvider.Verifier(&gooidc.Config{ClientID: clientID})
 
-	// fullSignIn drives authorize → login → callback → RP redirect →
+	// One virtual passkey for the seeded user across every flow: the
+	// first ceremony enrolls it (passkey-only first touch), later ones
+	// assert it.
+	authenticator, err := authtest.New("127.0.0.1", issuer)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// ceremony drives begin → authenticator → finish and returns the
+	// callback redirect the page script would follow.
+	ceremony := func(b *browser, id, csrf string) string {
+		t.Helper()
+		q := url.Values{"authRequestID": {id}, "csrf": {csrf}, "username": {username}}
+		beginResp := b.postForm(t, issuer+"/login/begin?"+q.Encode(), nil, nil)
+		var begin struct {
+			CeremonyID string          `json:"ceremonyID"`
+			Kind       string          `json:"kind"`
+			Options    json.RawMessage `json:"options"`
+		}
+		if err := json.Unmarshal([]byte(body(t, beginResp)), &begin); err != nil {
+			t.Fatalf("begin: %v", err)
+		}
+		var waBody []byte
+		if begin.Kind == "register" {
+			waBody, err = authenticator.CreateResponse(begin.Options)
+		} else {
+			waBody, err = authenticator.GetResponse(begin.Options)
+		}
+		if err != nil {
+			t.Fatal(err)
+		}
+		q.Set("ceremonyID", begin.CeremonyID)
+		finResp := b.postJSON(t, issuer+"/login/finish?"+q.Encode(), waBody)
+		var fin struct {
+			Redirect string `json:"redirect"`
+		}
+		raw := body(t, finResp)
+		if finResp.StatusCode != http.StatusOK {
+			t.Fatalf("finish: %d %s", finResp.StatusCode, raw)
+		}
+		if err := json.Unmarshal([]byte(raw), &fin); err != nil {
+			t.Fatal(err)
+		}
+		return fin.Redirect
+	}
+
+	// fullSignIn drives authorize → ceremony → callback → RP redirect →
 	// token exchange, with a fresh PKCE verifier per flow.
 	fullSignIn := func(b *browser) (*oauth2.Token, string) {
 		t.Helper()
@@ -180,18 +245,20 @@ func TestM1Gate(t *testing.T) {
 		resp := b.get(t, cfg.AuthCodeURL("state-1", oauth2.S256ChallengeOption(pkce)))
 		var loc string
 		if resp.StatusCode == http.StatusFound {
-			// Browser session skipped the form entirely (D11).
+			// Browser session skipped the ceremony entirely (D11).
 			loc = resp.Header.Get("Location")
 			drain(resp)
 		} else {
 			page := body(t, resp)
 			id := resp.Request.URL.Query().Get("authRequestID")
 			csrf := extractField(t, page, "csrf")
-			post := b.postForm(t, issuer+"/login/", url.Values{
-				"authRequestID": {id}, "csrf": {csrf}, "username": {username},
-			}, nil)
-			drain(post)
-			loc = post.Header.Get("Location")
+			redirect := ceremony(b, id, csrf)
+			if !strings.HasPrefix(redirect, "http") {
+				redirect = issuer + redirect
+			}
+			cb := b.get(t, redirect)
+			drain(cb)
+			loc = cb.Header.Get("Location")
 		}
 		if loc == "" || !strings.Contains(loc, "code=") {
 			t.Fatalf("no code in final redirect %q", loc)
@@ -243,7 +310,7 @@ func TestM1Gate(t *testing.T) {
 		t.Fatal("second redemption of a code succeeded")
 	}
 
-	// --- SC-002: forged POSTs change nothing ----------------------------
+	// --- SC-002: forged ceremony POSTs change nothing -------------------
 	b3 := newBrowser(t)
 	resp := b3.get(t, cfg.AuthCodeURL("state-2", oauth2.S256ChallengeOption(oauth2.GenerateVerifier())))
 	page := body(t, resp)
@@ -252,7 +319,7 @@ func TestM1Gate(t *testing.T) {
 
 	before := sessionRevision(ctx, t, fold, id)
 	for name, attempt := range map[string]struct {
-		form    url.Values
+		query   url.Values
 		headers map[string]string
 	}{
 		"missing csrf": {url.Values{"authRequestID": {id}, "username": {username}}, nil},
@@ -260,36 +327,50 @@ func TestM1Gate(t *testing.T) {
 		"foreign origin": {url.Values{"authRequestID": {id}, "csrf": {csrf}, "username": {username}},
 			map[string]string{"Origin": "https://evil.example"}},
 	} {
-		r := b3.postForm(t, issuer+"/login/", attempt.form, attempt.headers)
+		r := b3.postForm(t, issuer+"/login/begin?"+attempt.query.Encode(), nil, attempt.headers)
 		drain(r)
 		if r.StatusCode < 400 {
-			t.Errorf("%s: status %d, want a refusal", name, r.StatusCode)
+			t.Errorf("%s (begin): status %d, want a refusal", name, r.StatusCode)
+		}
+		f := b3.postJSON(t, issuer+"/login/finish?"+attempt.query.Encode(), []byte(`{}`))
+		drain(f)
+		if f.StatusCode < 400 {
+			t.Errorf("%s (finish): status %d, want a refusal", name, f.StatusCode)
 		}
 		if got := sessionRevision(ctx, t, fold, id); got != before {
 			t.Errorf("%s: auth request revision moved %d→%d — state changed", name, before, got)
 		}
 	}
-	// The legitimate submission still completes (the one-shot token was
-	// never consumed by the forgeries).
-	post := b3.postForm(t, issuer+"/login/", url.Values{
+	// The passkey-only rule is enforced behavior: the pre-M2 form POST
+	// no longer signs anyone in.
+	stub := b3.postForm(t, issuer+"/login/", url.Values{
 		"authRequestID": {id}, "csrf": {csrf}, "username": {username},
 	}, nil)
-	drain(post)
-	if !strings.Contains(post.Header.Get("Location"), "code=") {
-		t.Fatal("legitimate submission after forgeries did not complete")
+	drain(stub)
+	if stub.StatusCode < 400 || stub.Header.Get("Location") != "" {
+		t.Fatalf("the retired username-only login answered %d %q", stub.StatusCode, stub.Header.Get("Location"))
+	}
+	// The legitimate ceremony still completes (refusals never consumed
+	// the one-shot token).
+	if redirect := ceremony(b3, id, csrf); !strings.Contains(redirect, "id=") {
+		t.Fatalf("legitimate ceremony after forgeries got %q", redirect)
 	}
 
 	// --- SC-001/SC-002: mid-flow restart --------------------------------
+	// The restart lands between the ceremony and the token exchange: the
+	// code, the ceremony outcome, and the keys all live in KV.
 	b4 := newBrowser(t)
 	pkce4 := oauth2.GenerateVerifier()
 	resp4 := b4.get(t, cfg.AuthCodeURL("state-4", oauth2.S256ChallengeOption(pkce4)))
 	page4 := body(t, resp4)
 	id4 := resp4.Request.URL.Query().Get("authRequestID")
-	post4 := b4.postForm(t, issuer+"/login/", url.Values{
-		"authRequestID": {id4}, "csrf": {extractField(t, page4, "csrf")}, "username": {username},
-	}, nil)
-	drain(post4)
-	loc4, err := url.Parse(post4.Header.Get("Location"))
+	redirect4 := ceremony(b4, id4, extractField(t, page4, "csrf"))
+	if !strings.HasPrefix(redirect4, "http") {
+		redirect4 = issuer + redirect4
+	}
+	cb4 := b4.get(t, redirect4)
+	drain(cb4)
+	loc4, err := url.Parse(cb4.Header.Get("Location"))
 	if err != nil {
 		t.Fatal(err)
 	}

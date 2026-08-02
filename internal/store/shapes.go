@@ -4,8 +4,13 @@ package store
 // only; a breaking change is a stated migration under the store-shape
 // one-way door. Timestamps are RFC 3339 UTC strings.
 
-// User is a person the fold can sign in. M2 adds credentials (public
-// keys and digests only — constitution I) additively.
+import "encoding/json"
+
+// User is a person the fold can sign in. Credentials arrived with M2,
+// additively (D2): each entry is a WebAuthn credential record holding
+// public material only — credential id, COSE public key, flags, sign
+// count. Nothing in it may be sufficient to impersonate the user
+// (constitution I).
 type User struct {
 	Schema      int    `json:"schema"`
 	ID          string `json:"id"`
@@ -14,6 +19,9 @@ type User struct {
 	Status      string `json:"status"` // active | disabled
 	CreatedAt   string `json:"created_at"`
 	UpdatedAt   string `json:"updated_at"`
+	// Credentials is the user's enrolled passkeys, serialized
+	// go-webauthn credential records (public material only).
+	Credentials []json.RawMessage `json:"credentials,omitempty"`
 }
 
 // Client is a registered OAuth client. M1 clients are public-with-PKCE;
@@ -80,4 +88,18 @@ type BrowserSession struct {
 	Subject   string `json:"subject"`
 	CreatedAt string `json:"created_at"`
 	ExpiresAt string `json:"expires_at"`
+}
+
+// Ceremony is a WebAuthn ceremony in flight (M2): the library's
+// SessionData between Begin and Finish, bound to the user and the auth
+// request it will complete. Short-lived, sealed like everything else.
+type Ceremony struct {
+	Schema        int             `json:"schema"`
+	ID            string          `json:"id"`
+	Kind          string          `json:"kind"` // register | login
+	UserID        string          `json:"user_id"`
+	AuthRequestID string          `json:"auth_request_id"`
+	SessionData   json.RawMessage `json:"session_data"`
+	CreatedAt     string          `json:"created_at"`
+	ExpiresAt     string          `json:"expires_at"`
 }

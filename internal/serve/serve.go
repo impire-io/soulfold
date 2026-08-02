@@ -22,6 +22,7 @@ import (
 	"github.com/impire-io/soulfold/internal/envelope"
 	"github.com/impire-io/soulfold/internal/keys"
 	"github.com/impire-io/soulfold/internal/natsserver"
+	"github.com/impire-io/soulfold/internal/passkeys"
 	"github.com/impire-io/soulfold/internal/provider"
 	"github.com/impire-io/soulfold/internal/store"
 	"github.com/impire-io/soulfold/internal/ui"
@@ -114,9 +115,14 @@ func Open(ctx context.Context, opts Options) (*Fold, error) {
 		f.Close()
 		return nil, err
 	}
+	pk, err := passkeys.New(st, issuerURL)
+	if err != nil {
+		f.Close()
+		return nil, err
+	}
 	mux := http.NewServeMux()
 	mux.Handle("/", p)
-	uiHandler := &ui.Handler{St: st, Issuer: issuerURL, Callback: op.AuthCallbackURL(p)}
+	uiHandler := &ui.Handler{St: st, Passkeys: pk, Issuer: issuerURL, Callback: op.AuthCallbackURL(p)}
 	uiHandler.Register(mux)
 
 	listen := opts.Listen
