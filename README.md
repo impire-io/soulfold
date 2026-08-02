@@ -21,12 +21,12 @@ other OIDC provider may stand instead.
 **Status: genesis.** No product code yet — the roadmap starts at the OP
 skeleton behind its research gates.
 
-How this project is run lives in [`hq/`](hq/README.md) — read
+How this project is run lives in [`../soul-hq/`](../soul-hq/README.md) — read
 [`AGENTS.md`](AGENTS.md) first. Where things stand:
-[`hq/04-JOURNEY/README.md`](hq/04-JOURNEY/README.md). The plan:
-[`hq/03-IMPLEMENTATION/ROADMAP.md`](hq/03-IMPLEMENTATION/ROADMAP.md).
+[`../soul-hq/04-JOURNEY/README.md`](../soul-hq/04-JOURNEY/README.md). The plan:
+[`../soul-hq/03-IMPLEMENTATION/ROADMAP.md`](../soul-hq/03-IMPLEMENTATION/ROADMAP.md).
 Why the fold exists as a sibling of
 [soulidentity](https://github.com/impire-io/soulidentity) rather than
-inside it: [`hq/04-JOURNEY/0001-genesis-the-fold.md`](hq/04-JOURNEY/0001-genesis-the-fold.md).
+inside it: [`../soul-hq/04-JOURNEY/0041-soulfold-genesis-the-fold.md`](../soul-hq/04-JOURNEY/0041-soulfold-genesis-the-fold.md).
 
 Module `github.com/impire-io/soulfold`, Go 1.26. MIT licensed.

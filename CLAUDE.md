@@ -13,21 +13,21 @@ single-binary distribution. Protocol comes from certified libraries
 (`zitadel/oidc`, `go-webauthn`), never hand-rolled.
 Module `github.com/impire-io/soulfold`, Go 1.26.
 
-**How this project is run lives in `hq/` — read [`AGENTS.md`](AGENTS.md)
+**How this project is run lives in `../soul-hq/` — read [`AGENTS.md`](AGENTS.md)
 first** (orientation order + the non-negotiables), then hold decisions
-against `hq/00-GENESIS/`. Where things stand: `hq/04-JOURNEY/README.md`.
-The plan: `hq/03-IMPLEMENTATION/ROADMAP.md`. Design docs arrive in
-`hq/02-DESIGN/` by research graduation — none exist yet.
+against `../soul-hq/00-GENESIS/`. Where things stand: `../soul-hq/04-JOURNEY/README.md`.
+The plan: `../soul-hq/03-IMPLEMENTATION/ROADMAP.md`. Design docs arrive in
+`../soul-hq/02-DESIGN/soulfold/` by research graduation — none exist yet.
 
 Conventions:
 
 - Quality gate before every commit: `make check` (fmt, tidy, build,
-  test, lint) — all green, none skipped; `make test` includes
-  `internal/hqlint`.
+  test, lint) — all green, none skipped. The hq
+  structural lint rides the soul-hq gate.
 - Sign every commit. Push after landing with CI green.
 - No password lane, ever (constitution I). No Soulstream-only claim,
   endpoint, or side-channel (constitution II) — the fold must stay
   indistinguishable from any external OIDC provider.
 - The journey duty: every landed milestone, concluded research topic,
-  or load-bearing decision gets an episode in `hq/04-JOURNEY/` in the
+  or load-bearing decision gets an episode in `../soul-hq/04-JOURNEY/` in the
   same change (`/journey-log`; research via `/research-graduate`).

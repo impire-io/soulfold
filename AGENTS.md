@@ -1,30 +1,30 @@
 # Agent guide for Soulfold
 
 Durable instructions for any coding agent working in this repository. The full
-rules live in `hq/00-GENESIS/`; this file is the orientation and the
+rules live in `../soul-hq/00-GENESIS/`; this file is the orientation and the
 non-negotiables.
 
 ## Orientation (read in this order)
 
-1. `hq/00-GENESIS/` — [`vision.md`](hq/00-GENESIS/vision.md) (the fold:
+1. `../soul-hq/00-GENESIS/` — [`vision.md`](../soul-hq/00-GENESIS/vision.md) (the fold:
    the ecosystem's default IAM — passkey-first OIDC on JetStream KV —
    and what it refuses to become: not a password store, not a
    privileged peer of soulidentity, not a parallel permission system,
    not a protocol fork, not a general-purpose IdP product),
-   [`constitution.md`](hq/00-GENESIS/constitution.md) (the articles no
+   [`constitution.md`](../soul-hq/00-GENESIS/constitution.md) (the articles no
    change may violate, plus the anti-drift working agreement), and
-   [`how-we-work.md`](hq/00-GENESIS/how-we-work.md) (pipeline, research
+   [`how-we-work.md`](../soul-hq/00-GENESIS/how-we-work.md) (pipeline, research
    lifecycle, the journey duty). Decisions are held against these.
-2. `hq/04-JOURNEY/README.md` — where things stand + the episode index.
-3. `hq/03-IMPLEMENTATION/ROADMAP.md` — the milestones and their gates.
-4. `hq/02-DESIGN/` — the design docs and their numbered decisions
+2. `../soul-hq/04-JOURNEY/README.md` — where things stand + the episode index.
+3. `../soul-hq/03-IMPLEMENTATION/ROADMAP.md` — the milestones and their gates.
+4. `../soul-hq/02-DESIGN/soulfold/` — the design docs and their numbered decisions
    (none yet; they arrive by research graduation).
 
 ## Non-negotiables (constitution articles, in brief)
 
 - **Quality gate before "done"** (all green, none skipped, before every
-  commit): `make check` — fmt, tidy, build, test, lint; `make test`
-  (`go test ./...`) includes the hq structural lint (`internal/hqlint`).
+  commit): `make check` — fmt, tidy, build, test, lint. The hq
+  structural lint rides the soul-hq gate (make test there).
 - **Passkeys, not passwords** (I): no password lane, ever; credential
   records hold public keys and digests only — nothing the fold stores
   may be sufficient to impersonate a user.
@@ -50,7 +50,7 @@ non-negotiables.
 ## The flow
 
 - **Research** runs through `/research-start` → investigate →
-  `/research-graduate` (`hq/01-RESEARCH/`). A capability that isn't
+  `/research-graduate` (`../soul-hq/01-RESEARCH/`). A capability that isn't
   decided yet starts as research, not as code — M1's research topics
   are named on the roadmap.
 - **Implementation** follows the roadmap's milestones against the design
@@ -58,4 +58,4 @@ non-negotiables.
   written, design propagated — in the same merge.
 - **The journey duty (required):** every landed milestone, concluded
   research topic, or load-bearing decision gets a numbered episode in
-  `hq/04-JOURNEY/` — `/journey-log` does this.
+  `../soul-hq/04-JOURNEY/` — `/journey-log` does this.
