@@ -77,6 +77,34 @@ stays the rule (constitution III).
 
 ## Verdict
 
-<Empty until graduation. Filled by /research-graduate: PASS/FAIL per bar with the
-honest numbers, each load-bearing claim tagged [measured] / [mechanism-argument]
-/ [judgment].>
+All four pre-registered bars **PASS**, none amended, on the pinned rig
+stack (`zitadel/oidc` v3.48.1, `go-oidc` v3.20.0, `go-webauthn`
+v0.17.4, `virtualwebauthn` v1.0.5, embedded nats-server v2.14.4,
+2026-08-02):
+
+- **Bar 1 — PASS** [measured]: a stock RP completed
+  authorization-code + PKCE and verified the ID token (sub, nonce)
+  against published JWKS; the measured page inventory over the whole
+  run was `GET /login/` ×1 and `POST /login/` ×3 (error renders) —
+  nothing undeclared. Login + error is the entire M1 surface.
+- **Bar 2 — PASS** [measured]: a full process restart (HTTP + embedded
+  NATS, same store, same issuer) between the login POST and the token
+  exchange was invisible: no re-authentication, code issued from the
+  KV record, exchange succeeded against endpoints cached pre-restart,
+  browser-session record intact.
+- **Bar 3 — PASS** [measured]: missing token, mismatched token, and
+  valid-token-with-cross-site-Origin all rejected 403 with zero state
+  change; legitimate submission accepted. Mechanism: one-shot
+  synchronizer token minted into the auth-request KV record + Origin
+  equality when present; SameSite cannot cover the pre-auth POST
+  [mechanism-argument].
+- **Bar 4 — PASS** [measured]: 10/10 register-then-login cells. The
+  server enforces origin ∈ RPOrigins and rpIdHash == sha256(RPID),
+  nothing else (the suffix rule is the browser's half — measured via
+  the unrelated-but-allowlisted cell); parent-domain RP ID is a valid
+  layout; a renamed host rejects the enrolled passkey (rpIdHash
+  mismatch) — deployment naming is a one-way door closing at first
+  enrollment.
+
+The reversal condition was never approached: the whole flow ran with
+zero JavaScript. Outcome: graduate to design.
