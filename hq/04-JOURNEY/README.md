@@ -17,6 +17,17 @@ because a refuted assumption is as load-bearing as the shipped code.
 
 ## Where things stand (2026-08-02)
 
+**The store is decided** ([episode 0002](0002-kv-schema-and-key-lifecycle.md)):
+M1's gating research concluded with all four pre-registered bars passing
+[measured] — restart round-trip 6/6 byte-identical, additive decode
+25/25 (and the cross-version RMW trap measured into design rule D3),
+CAS with zero lost updates and exactly-once code redemption 100/100,
+and a full JWKS rotation with 0 failures in 466 verifications under a
+never-restarted go-oidc verifier. The fold's first design doc landed:
+[store-and-key-lifecycle](../02-DESIGN/store-and-key-lifecycle.md)
+(D1–D8, including RS256 for the seam). M1's remaining research is the
+session and UI shape; the build follows it.
+
 **Genesis — the fold is founded from a refusal**
 ([episode 0001](0001-genesis-the-fold.md)): soulidentity's default-IdP
 question (its journey 0019) resolved with the identity plane's refusal
@@ -35,3 +46,4 @@ key-lifecycle research. No product code exists yet.
 | # | Episode |
 |---|---|
 | 0001 | [Genesis: the fold is founded from a refusal](0001-genesis-the-fold.md) |
+| 0002 | [The store is decided: four bars, four passes](0002-kv-schema-and-key-lifecycle.md) |

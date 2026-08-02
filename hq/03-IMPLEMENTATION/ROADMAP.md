@@ -8,13 +8,16 @@ a task.*
 
 ## Where we are (2026-08-02)
 
-**Genesis** ([journey 0001](../04-JOURNEY/0001-genesis-the-fold.md)):
-the fold is founded from soulidentity's default-IdP decision (its journey
-0019) — the ecosystem's default IAM is this sibling project, reached by
-consumers exclusively through standard OIDC and indistinguishable from
-Entra by design. The repo carries the hq process, the constitution
-(1.0.0), the structural lint, and a version-only binary skeleton. No
-product code exists yet; M1's research comes first.
+**The store is decided** ([journey 0002](../04-JOURNEY/0002-kv-schema-and-key-lifecycle.md)):
+M1's KV-schema-and-key-lifecycle research concluded with all four
+pre-registered bars passing [measured]; the design landed as
+[store-and-key-lifecycle](../02-DESIGN/store-and-key-lifecycle.md)
+(D1–D8), whose acceptance criteria the M1 gate inherits. M1's remaining
+research is the session and UI shape; the build follows it. Before
+that, **genesis** ([journey 0001](../04-JOURNEY/0001-genesis-the-fold.md)):
+the fold founded from soulidentity's default-IdP decision (its journey
+0019), the hq process, the constitution (1.0.0), the structural lint,
+and a version-only binary skeleton. No product code exists yet.
 
 ## Milestones
 
@@ -27,7 +30,9 @@ product code exists yet; M1's research comes first.
    nats-server as the store; the issued tokens verify against the
    published JWKS; the fold survives restart with its state in KV
    [measured]. Research before build: the KV schema and the signing-key
-   lifecycle (rotation without consumer restarts).
+   lifecycle — **done** ([design](../02-DESIGN/store-and-key-lifecycle.md),
+   [journey 0002](../04-JOURNEY/0002-kv-schema-and-key-lifecycle.md));
+   the session and UI shape — open.
 2. **M2 — passkeys.** WebAuthn registration and login ceremonies
    (`go-webauthn`) replace the seeded stub; the passkey-only rule
    (constitution I) becomes enforced behavior. **Gate**: full
@@ -59,9 +64,10 @@ product code exists yet; M1's research comes first.
 
 ## Open research questions (before their milestones)
 
-- **The KV schema and key lifecycle** (gates M1): bucket layout, record
-  shapes, optimistic-concurrency needs; how signing keys are born,
-  rotated, and retired so JWKS rollover never needs a consumer restart.
+- ~~**The KV schema and key lifecycle** (gates M1)~~ — concluded
+  2026-08-02, all bars passed: see
+  [store-and-key-lifecycle](../02-DESIGN/store-and-key-lifecycle.md) and
+  [journey 0002](../04-JOURNEY/0002-kv-schema-and-key-lifecycle.md).
 - **The session and UI shape** (gates M1/M2): how little surface the
   flows need — server-rendered pages, session records in KV, CSRF
   posture; WebAuthn's origin/RP-ID constraints on deployment naming.
