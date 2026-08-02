@@ -18,10 +18,10 @@ import (
 	"github.com/nats-io/nats.go"
 	"github.com/nats-io/nats.go/jetstream"
 
+	"github.com/impire-io/soulfold/authtest"
 	"github.com/impire-io/soulfold/internal/envelope"
 	"github.com/impire-io/soulfold/internal/natsserver"
 	"github.com/impire-io/soulfold/internal/passkeys"
-	"github.com/impire-io/soulfold/internal/passkeys/authtest"
 	"github.com/impire-io/soulfold/internal/serve"
 	"github.com/impire-io/soulfold/internal/store"
 )

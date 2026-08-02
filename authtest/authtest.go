@@ -1,9 +1,11 @@
-// Package authtest is a virtual WebAuthn authenticator for the M2
-// gate: it performs real create/get ceremonies in-process — ES256 key
-// pair, honest rpIdHash, flags, counters, and ASN.1 signatures — so
-// register-then-login is proven at library level inside make test, as
-// the roadmap's gate demands. The one thing it cannot prove is a human
-// touching hardware; the quickstart's runbook covers that half.
+// Package authtest is a virtual WebAuthn authenticator for test gates —
+// the fold's own and any consumer's (an embedding distribution proving
+// its bundled sign-in, an RP proving its integration). It performs real
+// create/get ceremonies in-process: ES256 key pair, honest rpIdHash,
+// flags, counters, ASN.1 signatures, CBOR "none" attestation. The one
+// thing it cannot prove is a human touching hardware; the M2
+// quickstart's runbook covers that half. Not for production use — a
+// real deployment's credentials live in real authenticators.
 package authtest
 
 import (

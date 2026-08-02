@@ -24,8 +24,8 @@ import (
 	"github.com/go-jose/go-jose/v4"
 	"golang.org/x/oauth2"
 
-	"github.com/impire-io/soulfold/internal/passkeys/authtest"
-	"github.com/impire-io/soulfold/internal/serve"
+	"github.com/impire-io/soulfold/authtest"
+	"github.com/impire-io/soulfold/embed"
 )
 
 // issuerArm is what the admission gate needs from an issuer: where it
@@ -44,15 +44,15 @@ type issuerArm interface {
 const foldClientID = "fleet-rp"
 
 type foldArm struct {
-	fold      *serve.Fold
 	issuer    string
 	cfg       oauth2.Config
 	users     map[string]*authtest.Authenticator // role -> enrolled passkey
 	usernames map[string]string                  // role -> username
 }
 
-// newFoldArm runs a real fold: passkey users, one per role the gate
-// needs, each enrolled through the full ceremony on first sign-in.
+// newFoldArm runs a real fold through its public embed seam (M5):
+// passkey users, one per role the gate needs, each enrolled through the
+// full ceremony on first sign-in.
 func newFoldArm(t *testing.T, roles ...string) *foldArm {
 	t.Helper()
 	ln, err := net.Listen("tcp", "127.0.0.1:0")
@@ -63,35 +63,45 @@ func newFoldArm(t *testing.T, roles ...string) *foldArm {
 	_ = ln.Close()
 	issuer := "http://" + addr
 
-	ctx := context.Background()
-	fold, err := serve.Open(ctx, serve.Options{
-		Issuer: issuer, Listen: addr, StateDir: t.TempDir(),
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(fold.Close)
-	go func() { _ = fold.Run(ctx) }()
-
 	const redirectURI = "http://127.0.0.1:1/cb"
-	if _, err := serve.SeedClient(ctx, fold.Store, foldClientID, "fleet", []string{redirectURI}); err != nil {
-		t.Fatal(err)
-	}
 	arm := &foldArm{
-		fold: fold, issuer: issuer,
-		users: map[string]*authtest.Authenticator{}, usernames: map[string]string{},
+		issuer: issuer,
+		users:  map[string]*authtest.Authenticator{}, usernames: map[string]string{},
 	}
+	seedUsers := make([]embed.SeedUser, 0, len(roles))
 	for _, role := range roles {
 		username := "user-" + role
-		if _, err := serve.SeedUser(ctx, fold.Store, username, username, role); err != nil {
-			t.Fatal(err)
-		}
+		seedUsers = append(seedUsers, embed.SeedUser{
+			Username: username, DisplayName: username, Roles: []string{role},
+		})
 		auth, err := authtest.New("127.0.0.1", issuer)
 		if err != nil {
 			t.Fatal(err)
 		}
 		arm.users[role] = auth
 		arm.usernames[role] = username
+	}
+
+	ctx, cancel := context.WithCancel(context.Background())
+	t.Cleanup(cancel)
+	ready := make(chan struct{})
+	runErr := make(chan error, 1)
+	go func() {
+		runErr <- embed.Run(ctx, embed.Options{
+			Issuer: issuer, Listen: addr, StateDir: t.TempDir(),
+			SeedUsers: seedUsers,
+			SeedClients: []embed.SeedClient{
+				{ClientID: foldClientID, Name: "fleet", RedirectURIs: []string{redirectURI}},
+			},
+			Ready: func(string) { close(ready) },
+		})
+	}()
+	select {
+	case <-ready:
+	case err := <-runErr:
+		t.Fatalf("embed.Run failed during startup: %v", err)
+	case <-time.After(15 * time.Second):
+		t.Fatal("the fold never became ready")
 	}
 
 	rpProvider, err := gooidc.NewProvider(ctx, issuer)

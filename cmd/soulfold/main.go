@@ -13,6 +13,7 @@ import (
 	"strings"
 	"syscall"
 
+	"github.com/impire-io/soulfold/embed"
 	"github.com/impire-io/soulfold/internal/serve"
 	"github.com/impire-io/soulfold/internal/version"
 )
@@ -50,25 +51,28 @@ func usage() error {
 	return fmt.Errorf("unknown or missing command")
 }
 
+// cmdServe runs the fold through the public embed seam — the daemon is
+// the seam's first consumer (the ecosystem's D29 discipline).
 func cmdServe(args []string) error {
 	fs := flag.NewFlagSet("serve", flag.ExitOnError)
 	issuer := fs.String("issuer", "", "public issuer URL (its host becomes WebAuthn's one-way door at first enrollment)")
 	stateDir := fs.String("state-dir", "", "directory for the seal seed and the embedded store")
 	listen := fs.String("listen", "", "listen address (default: the issuer's host:port)")
 	natsURL := fs.String("nats-url", "", "external JetStream server (default: embedded)")
+	tokenAudience := fs.String("token-audience", "", "fixed audience joined to every issued token (the resource deployment's value)")
+	enableDCR := fs.Bool("enable-dcr", false, "serve RFC 7591 dynamic client registration at /register")
 	if err := fs.Parse(args); err != nil {
 		return err
 	}
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
-	f, err := serve.Open(ctx, serve.Options{
+	return embed.Run(ctx, embed.Options{
 		Issuer: *issuer, Listen: *listen, StateDir: *stateDir, NATSURL: *natsURL,
+		TokenAudience: *tokenAudience, EnableDCR: *enableDCR,
+		Ready: func(addr string) {
+			fmt.Printf("soulfold %s serving %s on %s\n", version.Version, *issuer, addr)
+		},
 	})
-	if err != nil {
-		return err
-	}
-	fmt.Printf("soulfold %s serving %s on %s\n", version.Version, *issuer, f.Addr())
-	return f.Run(ctx)
 }
 
 // cmdSeed opens the store the same way serve does (no HTTP listener

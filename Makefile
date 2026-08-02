@@ -17,10 +17,13 @@ build:
 	go build -ldflags "$(LDFLAGS)" -o bin/ ./cmd/...
 
 # All tests, no skips — including the consumer-position admission rig
-# (e2e/, its own module so soulidentity stays at its published tag).
+# (e2e/, its own module so soulidentity stays at its published tag) and
+# the compiler-proof embed gate (e2e/embedgate, path outside the module
+# namespace so internal/ imports cannot compile).
 test:
 	go test ./...
 	cd e2e && go test ./...
+	cd e2e/embedgate && go test ./...
 
 lint:
 	golangci-lint run
