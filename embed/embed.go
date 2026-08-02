@@ -31,8 +31,10 @@ type Options struct {
 	// embedded JetStream server's store (the seed stays outside it).
 	StateDir string
 	// NATSURL, when set, stores on an external JetStream server the
-	// caller operates instead of an embedded one.
-	NATSURL string
+	// caller operates instead of an embedded one. NATSCreds optionally
+	// names a creds file for it (operator-mode parents).
+	NATSURL   string
+	NATSCreds string
 	// BucketPrefix overrides the default bucket prefix (D1).
 	BucketPrefix string
 	// TokenAudience, when set, joins every issued token's aud alongside
@@ -75,7 +77,7 @@ type SeedClient struct {
 func Run(ctx context.Context, o Options) error {
 	f, err := serve.Open(ctx, serve.Options{
 		Issuer: o.Issuer, Listen: o.Listen, StateDir: o.StateDir,
-		NATSURL: o.NATSURL, BucketPrefix: o.BucketPrefix,
+		NATSURL: o.NATSURL, NATSCreds: o.NATSCreds, BucketPrefix: o.BucketPrefix,
 		TokenAudience: o.TokenAudience, EnableDCR: o.EnableDCR,
 	})
 	if err != nil {

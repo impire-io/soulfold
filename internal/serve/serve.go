@@ -43,8 +43,10 @@ type Options struct {
 	// the seed stays outside it, D17).
 	StateDir string
 	// NATSURL, when set, uses an external JetStream server instead of
-	// the embedded one.
-	NATSURL string
+	// the embedded one. NATSCreds optionally names a creds file for it
+	// (operator-mode parents; the embedded server needs none).
+	NATSURL   string
+	NATSCreds string
 	// BucketPrefix overrides the default bucket prefix (D1).
 	BucketPrefix string
 	// TokenAudience, when set, joins every issued token's aud alongside
@@ -96,7 +98,11 @@ func Open(ctx context.Context, opts Options) (*Fold, error) {
 		f.ns = ns
 		natsURL = ns.ClientURL()
 	}
-	nc, err := nats.Connect(natsURL)
+	var connectOpts []nats.Option
+	if opts.NATSCreds != "" {
+		connectOpts = append(connectOpts, nats.UserCredentials(opts.NATSCreds))
+	}
+	nc, err := nats.Connect(natsURL, connectOpts...)
 	if err != nil {
 		f.Close()
 		return nil, fmt.Errorf("serve: connect %s: %w", natsURL, err)
