@@ -72,6 +72,30 @@ because the alternative would be a quiet second database.
 
 ## Verdict
 
-<Empty until graduation. Filled by /research-graduate: PASS/FAIL per bar with the
-honest numbers, each load-bearing claim tagged [measured] / [mechanism-argument]
-/ [judgment].>
+All four pre-registered bars **PASS**, none amended, on the pinned rig
+stack (embedded nats-server v2.14.4, nats.go v1.52.0, zitadel/oidc
+v3.48.1, go-oidc v3.20.0, Go 1.26.2, this machine, 2026-08-02):
+
+- **Bar 1 — PASS** [measured]: 6/6 records across the four per-kind
+  buckets byte-identical after a full server stop and a new server on
+  the same store dir; buckets found by lookup, no re-seeding.
+- **Bar 2 — PASS** [measured]: additive matrix 25/25 across all four
+  record kinds, both directions. Measured caveat: a v1 reader that
+  read-modify-writes a v2 record silently drops v2-only fields → design
+  rule "one writer version per deployment", not a schema change.
+- **Bar 3 — PASS** [measured]: 8 writers × 1,000 CAS
+  (`Update(revision)`) increments landed at exactly 8,000; 36,961 CAS
+  rejections, all observably rejected and retried (~6,400 accepted
+  contended writes/s). Auth-code redemption as a CAS flip: exactly one
+  winner in 100/100 races of 8.
+- **Bar 4 — PASS** [measured]: one never-restarted go-oidc
+  `RemoteKeySet`: 466 verifications, 0 failures across a full rotation
+  (pending → active → retiring → retired). Controls: a fresh keyset
+  verified the retiring key's straggler token from published JWKS alone
+  and rejected it after retirement; final JWKS held exactly the new
+  key. go-oidc's refetch-on-unknown-kid is what absorbed the signing
+  switch [measured]; for TTL-cached verifiers the publish-before-sign
+  invariant carries the guarantee [mechanism-argument].
+
+The reversal condition was not approached: no bar failed for any
+reason, mechanical or otherwise. Outcome: graduate to design.
