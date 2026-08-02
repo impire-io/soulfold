@@ -218,8 +218,26 @@ func (s *storage) SetIntrospectionFromToken(_ context.Context, _ *oidc.Introspec
 	return errors.New("provider: introspection is not in M1's scope")
 }
 
-func (s *storage) GetPrivateClaimsFromScopes(_ context.Context, _, _ string, _ []string) (map[string]any, error) {
-	return nil, nil
+// GetPrivateClaimsFromScopes feeds the JWT access token's private
+// claims. The vocabulary is Entra's — `oid` (the stable subject id),
+// `preferred_username`, `roles` — because constitution II's test is a
+// verifier that cannot tell the fold from Entra, and the seam's
+// verifier of record (soulidentity's callout, its D23/D24) keys the
+// subject by oid and resolves roles by name. Role values *name* roles
+// declared on the consumer's side; they never carry permissions.
+func (s *storage) GetPrivateClaimsFromScopes(ctx context.Context, userID, _ string, _ []string) (map[string]any, error) {
+	var user store.User
+	if _, err := s.St.Get(ctx, s.St.Users, userID, &user); err != nil {
+		return nil, fmt.Errorf("provider: claims for %s: %w", userID, err)
+	}
+	claims := map[string]any{
+		"oid":                user.ID,
+		"preferred_username": user.Username,
+	}
+	if len(user.Roles) > 0 {
+		claims["roles"] = user.Roles
+	}
+	return claims, nil
 }
 
 func (s *storage) GetKeyByIDAndClientID(_ context.Context, _, _ string) (*jose.JSONWebKey, error) {
