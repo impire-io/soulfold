@@ -11,6 +11,7 @@ docs describe the system as it is.
 | Document | Covers | Decisions |
 |---|---|---|
 | [store-and-key-lifecycle.md](store-and-key-lifecycle.md) | The JetStream KV store: buckets, record shapes, additive evolution, the CAS discipline, and the signing-key lifecycle whose JWKS rollover needs no consumer restart. | D1–D8 |
+| [session-and-ui.md](session-and-ui.md) | The sign-in surface (two server-rendered pages, page-local script only), flow state as KV records, the CSRF posture, WebAuthn deployment-naming rules, and JWT access tokens. | D9–D15 |
 
 Decision numbers (D-entries) are global across the design docs: the next
 document continues where the last one stopped.

@@ -17,6 +17,20 @@ because a refuted assumption is as load-bearing as the shipped code.
 
 ## Where things stand (2026-08-02)
 
+**The sign-in surface is decided**
+([episode 0003](0003-session-and-ui-shape.md)): the second M1-gating
+research concluded with all four bars passing [measured] — the whole
+flow is two server-rendered pages and zero JavaScript (15/15 rig
+checks with a stock RP), a process restart mid-flow is invisible, the
+CSRF posture rejects every forged shape with zero state change, and
+the WebAuthn origin/RP-ID matrix (10/10) fixed the naming rules:
+renaming the public host invalidates enrolled passkeys. Second design
+doc: [session-and-ui](../02-DESIGN/session-and-ui.md) (D9–D15). M1's
+two named research topics are done; one new topic was opened at the
+operator's direction before the build starts — KV entry protection at
+rest (xkeys), since the record envelope sits inside the store-shape
+one-way door.
+
 **The store is decided** ([episode 0002](0002-kv-schema-and-key-lifecycle.md)):
 M1's gating research concluded with all four pre-registered bars passing
 [measured] — restart round-trip 6/6 byte-identical, additive decode
@@ -47,3 +61,4 @@ key-lifecycle research. No product code exists yet.
 |---|---|
 | 0001 | [Genesis: the fold is founded from a refusal](0001-genesis-the-fold.md) |
 | 0002 | [The store is decided: four bars, four passes](0002-kv-schema-and-key-lifecycle.md) |
+| 0003 | [Two pages, zero scripts, and a name that becomes a door](0003-session-and-ui-shape.md) |

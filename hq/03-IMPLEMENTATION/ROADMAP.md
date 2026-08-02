@@ -8,16 +8,18 @@ a task.*
 
 ## Where we are (2026-08-02)
 
-**The store is decided** ([journey 0002](../04-JOURNEY/0002-kv-schema-and-key-lifecycle.md)):
-M1's KV-schema-and-key-lifecycle research concluded with all four
-pre-registered bars passing [measured]; the design landed as
-[store-and-key-lifecycle](../02-DESIGN/store-and-key-lifecycle.md)
-(D1–D8), whose acceptance criteria the M1 gate inherits. M1's remaining
-research is the session and UI shape; the build follows it. Before
-that, **genesis** ([journey 0001](../04-JOURNEY/0001-genesis-the-fold.md)):
-the fold founded from soulidentity's default-IdP decision (its journey
-0019), the hq process, the constitution (1.0.0), the structural lint,
-and a version-only binary skeleton. No product code exists yet.
+**Both of M1's named research topics are concluded** — the store
+([journey 0002](../04-JOURNEY/0002-kv-schema-and-key-lifecycle.md) →
+[store-and-key-lifecycle](../02-DESIGN/store-and-key-lifecycle.md),
+D1–D8) and the sign-in surface
+([journey 0003](../04-JOURNEY/0003-session-and-ui-shape.md) →
+[session-and-ui](../02-DESIGN/session-and-ui.md), D9–D15), every
+pre-registered bar passing [measured]. One research topic now stands
+before the M1 build: **KV entry protection at rest** (opened at the
+operator's direction, xkeys hypothesis) — it gates M1 because the
+record envelope sits inside the store-shape one-way door. Genesis:
+[journey 0001](../04-JOURNEY/0001-genesis-the-fold.md). No product
+code exists yet.
 
 ## Milestones
 
@@ -32,7 +34,11 @@ and a version-only binary skeleton. No product code exists yet.
    [measured]. Research before build: the KV schema and the signing-key
    lifecycle — **done** ([design](../02-DESIGN/store-and-key-lifecycle.md),
    [journey 0002](../04-JOURNEY/0002-kv-schema-and-key-lifecycle.md));
-   the session and UI shape — open.
+   the session and UI shape — **done**
+   ([design](../02-DESIGN/session-and-ui.md),
+   [journey 0003](../04-JOURNEY/0003-session-and-ui-shape.md));
+   KV entry protection at rest — open (the record envelope is inside
+   the store-shape one-way door).
 2. **M2 — passkeys.** WebAuthn registration and login ceremonies
    (`go-webauthn`) replace the seeded stub; the passkey-only rule
    (constitution I) becomes enforced behavior. **Gate**: full
@@ -68,9 +74,16 @@ and a version-only binary skeleton. No product code exists yet.
   2026-08-02, all bars passed: see
   [store-and-key-lifecycle](../02-DESIGN/store-and-key-lifecycle.md) and
   [journey 0002](../04-JOURNEY/0002-kv-schema-and-key-lifecycle.md).
-- **The session and UI shape** (gates M1/M2): how little surface the
-  flows need — server-rendered pages, session records in KV, CSRF
-  posture; WebAuthn's origin/RP-ID constraints on deployment naming.
+- ~~**The session and UI shape** (gates M1/M2)~~ — concluded
+  2026-08-02, all bars passed: see
+  [session-and-ui](../02-DESIGN/session-and-ui.md) and
+  [journey 0003](../04-JOURNEY/0003-session-and-ui-shape.md).
+- **KV entry protection at rest** (gates M1): whether records are
+  sealed app-layer with NATS xkeys (x25519 curve keys — nkeys sign,
+  xkeys encrypt), protected by server-side filestore encryption, or
+  field-level only — and the key-custody story that makes any of it
+  more than obfuscation. Opened at the operator's direction; gates M1
+  because the envelope is part of the store shape (one-way door).
 - **The bootstrap story** (gates M3): the first admin's first passkey —
   the fold's equivalent of soulidentity's first-key research; invite
   URLs, their custody, and their honest naming.

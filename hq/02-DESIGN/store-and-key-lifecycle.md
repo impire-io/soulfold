@@ -98,7 +98,8 @@ in the record, the janitor lives in the bucket [mechanism-argument].
 | `keys` | `key.<kid>` | signing key |
 | `keys` | `active` | pointer → kid |
 | `sessions` | `<request-id>` | session (auth request / token record) |
-| `sessions` | `code.<code>` | single-use code index → request id |
+| `sessions` | `code.<hex(sha256(code))[:32]>` | single-use code index → request id ([session-and-ui](session-and-ui.md) D12: bearer secrets never verbatim) |
+| `sessions` | `bs_<session-id>` | browser session ([session-and-ui](session-and-ui.md) D11) |
 
 Record shapes (fields additive-only per D2; timestamps RFC 3339 UTC):
 
@@ -121,8 +122,12 @@ Record shapes (fields additive-only per D2; timestamps RFC 3339 UTC):
 - **session** — `schema`, `id`, `kind`
   (`auth_request | access_token | refresh_token`), `client_id`,
   `user_id?`, `scopes[]`, `redirect_uri?`, `state?`, `nonce?`,
-  `pkce_challenge?`, `pkce_method?`, `auth_time?`, `created_at`,
-  `expires_at`.
+  `pkce_challenge?`, `pkce_method?`, `response_type?`, `auth_time?`,
+  `done?`, `csrf?` (one-shot, [session-and-ui](session-and-ui.md)
+  D13), `created_at`, `expires_at`.
+- **browser session** (`bs_*`) — `schema`, `id`, `subject`,
+  `created_at`, `expires_at` ([session-and-ui](session-and-ui.md)
+  D11).
 
 `op.Storage` mapping, so implementation doesn't guess:
 `AuthRequestByID` → `sessions/<request-id>`; `SaveAuthCode` →
