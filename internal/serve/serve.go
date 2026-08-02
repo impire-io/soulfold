@@ -211,10 +211,13 @@ func (f *Fold) Close() {
 // SeedUser creates the M1 stand-in user (roadmap: "a seeded user and
 // client standing in for the ceremonies"; M3 replaces seeding with the
 // lifecycle). Roles surface as the token's roles-claim values.
+// The id shape (u-hex, no underscores) is a consumer-proven constraint:
+// it doubles as a soulstream persona name downstream, and that grammar
+// admits lowercase alphanumerics and hyphens only.
 func SeedUser(ctx context.Context, st *store.Store, username, displayName string, roles ...string) (store.User, error) {
 	now := store.Now()
 	u := store.User{
-		Schema: 1, ID: "u_" + store.RandID(8), Username: username,
+		Schema: 1, ID: "u-" + store.RandID(8), Username: username,
 		DisplayName: displayName, Status: "active", Roles: roles,
 		CreatedAt: now, UpdatedAt: now,
 	}

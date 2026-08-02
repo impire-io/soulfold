@@ -298,7 +298,7 @@ func TestM1Gate(t *testing.T) {
 	b1 := newBrowser(t)
 	tok, _ := fullSignIn(b1)
 	subject := verifyTokens(tok)
-	if !strings.HasPrefix(subject, "u_") {
+	if !strings.HasPrefix(subject, "u-") {
 		t.Fatalf("subject %q is not the seeded user", subject)
 	}
 
