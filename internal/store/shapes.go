@@ -113,10 +113,13 @@ type Session struct {
 
 // BrowserSession is the record the sf_session cookie names (D11): the
 // cookie carries only the record's name; everything it means lives here.
+// CSRF (M3 admin console, additive) is the per-session synchronizer
+// token the console embeds in its state-changing forms (D13's rule).
 type BrowserSession struct {
 	Schema    int    `json:"schema"`
 	ID        string `json:"id"`
 	Subject   string `json:"subject"`
+	CSRF      string `json:"csrf,omitempty"`
 	CreatedAt string `json:"created_at"`
 	ExpiresAt string `json:"expires_at"`
 }

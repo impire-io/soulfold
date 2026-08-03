@@ -18,26 +18,40 @@ The measured gate rides `make test`; this is the human-shaped walk.
 #    authorize redirect — one passkey ceremony enrolls AND signs in.
 ```
 
-## Day-to-day (the admin API, with your own bearer)
+## Day-to-day (the admin console — a browser and your passkey)
+
+Point a browser at **`<issuer>/admin`**. Sign in with the passkey of a
+user in the `admin` group (the bootstrap `root` above), and you get a
+console: list people, create them, mint their enrolment invites (shown
+once), move them between groups, disable accounts, and register/delete
+OAuth clients — no `curl`, no server-box access. The console
+authenticates by passkey (a session-only ceremony), gates on the
+`admin` group, and CSRF-protects every change.
+
+> RP-ID note: WebAuthn refuses a bare IP as the issuer host. Use
+> `localhost` for a local console, or the fronted public name in a
+> deployment — never `http://127.0.0.1:…` as the issuer.
+
+## Automation (the admin API, with a bearer)
 
 ```sh
 TOK=<your access token — sign in via any client; roles must carry "admin">
 
 # A new colleague, in a group whose name their tokens will carry:
-curl -sX POST -H "Authorization: Bearer $TOK" http://localhost:8378/admin/users \
+curl -sX POST -H "Authorization: Bearer $TOK" http://localhost:8378/api/admin/users \
   -d '{"username":"erin","display_name":"Erin","groups":["engineering"]}'
 
 # Their invite (the one response that ever shows a bearer — hand it
 # out-of-band, it is single-use and expires in 24h):
-curl -sX POST -H "Authorization: Bearer $TOK" http://localhost:8378/admin/invites \
+curl -sX POST -H "Authorization: Bearer $TOK" http://localhost:8378/api/admin/invites \
   -d '{"username":"erin"}'
 
 # Move them between groups — the change rides their NEXT token:
-curl -sX POST -H "Authorization: Bearer $TOK" http://localhost:8378/admin/users/erin/groups \
+curl -sX POST -H "Authorization: Bearer $TOK" http://localhost:8378/api/admin/users/erin/groups \
   -d '{"groups":["platform"]}'
 
 # Clients (deliberate registration; hosted MCP clients use DCR instead):
-curl -sX POST -H "Authorization: Bearer $TOK" http://localhost:8378/admin/clients \
+curl -sX POST -H "Authorization: Bearer $TOK" http://localhost:8378/api/admin/clients \
   -d '{"client_id":"wiki","name":"Wiki","redirect_uris":["https://wiki.example/cb"]}'
 ```
 

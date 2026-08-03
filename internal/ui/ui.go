@@ -15,17 +15,11 @@ import (
 	"html/template"
 	"net/http"
 	"net/url"
-	"time"
 
 	"github.com/impire-io/soulfold/internal/passkeys"
 	"github.com/impire-io/soulfold/internal/store"
+	"github.com/impire-io/soulfold/internal/websession"
 )
-
-// BrowserSessionLifetime bounds the sf_session record (D11).
-const BrowserSessionLifetime = 12 * time.Hour
-
-// CookieName carries the browser-session record's name — nothing else.
-const CookieName = "sf_session"
 
 var (
 	// The login page: a username field and the ceremony driver. The
@@ -252,35 +246,14 @@ func (h *Handler) completeAuthRequest(ctx context.Context, id, subject string) e
 // browserSubject resolves the sf_session cookie to a live record's
 // subject; the cookie itself asserts nothing (D11).
 func (h *Handler) browserSubject(r *http.Request) (string, bool) {
-	c, err := r.Cookie(CookieName)
-	if err != nil || c.Value == "" {
-		return "", false
-	}
-	var bs store.BrowserSession
-	if _, err := h.St.Get(r.Context(), h.St.Sessions, store.BrowserSessionKey(c.Value), &bs); err != nil {
+	bs, ok := websession.Get(r.Context(), h.St, r)
+	if !ok {
 		return "", false
 	}
 	return bs.Subject, true
 }
 
 func (h *Handler) setBrowserSession(ctx context.Context, w http.ResponseWriter, r *http.Request, subject string) {
-	id := store.RandID(16)
-	now := time.Now().UTC()
-	bs := store.BrowserSession{
-		Schema: 1, ID: id, Subject: subject,
-		CreatedAt: now.Format(time.RFC3339),
-		ExpiresAt: now.Add(BrowserSessionLifetime).Format(time.RFC3339),
-	}
-	if _, err := h.St.Create(ctx, h.St.Sessions, store.BrowserSessionKey(id), bs); err != nil {
-		return // sign-in proceeds; only the convenience session is lost
-	}
-	http.SetCookie(w, &http.Cookie{
-		Name:     CookieName,
-		Value:    id,
-		Path:     "/",
-		HttpOnly: true,
-		SameSite: http.SameSiteLaxMode,
-		Secure:   r.TLS != nil || h.Issuer.Scheme == "https",
-		MaxAge:   int(BrowserSessionLifetime / time.Second),
-	})
+	// sign-in proceeds even if the convenience session cannot be stored.
+	_, _ = websession.Set(ctx, h.St, w, r, subject)
 }

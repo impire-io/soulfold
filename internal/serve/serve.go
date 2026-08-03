@@ -20,6 +20,7 @@ import (
 	"github.com/zitadel/oidc/v3/pkg/op"
 
 	"github.com/impire-io/soulfold/internal/adminapi"
+	"github.com/impire-io/soulfold/internal/adminui"
 	"github.com/impire-io/soulfold/internal/envelope"
 	"github.com/impire-io/soulfold/internal/keys"
 	"github.com/impire-io/soulfold/internal/lifecycle"
@@ -67,6 +68,7 @@ type Fold struct {
 	Store     *store.Store
 	Keys      *keys.Service
 	Lifecycle *lifecycle.Service
+	Passkeys  *passkeys.Service
 
 	httpSrv *http.Server
 	ln      net.Listener
@@ -139,6 +141,7 @@ func Open(ctx context.Context, opts Options) (*Fold, error) {
 		f.Close()
 		return nil, err
 	}
+	f.Passkeys = pk
 	mux := http.NewServeMux()
 	mux.Handle("/", p)
 	uiHandler := &ui.Handler{St: st, Passkeys: pk, Issuer: issuerURL, Callback: op.AuthCallbackURL(p)}
@@ -148,6 +151,9 @@ func Open(ctx context.Context, opts Options) (*Fold, error) {
 	}
 	adminapi.Register(mux, &adminapi.API{
 		Lifecycle: f.Lifecycle, Keys: f.Keys, Issuer: opts.Issuer,
+	})
+	adminui.Register(mux, &adminui.Console{
+		Lifecycle: f.Lifecycle, Passkeys: pk, St: st, Issuer: opts.Issuer,
 	})
 
 	listen := opts.Listen
