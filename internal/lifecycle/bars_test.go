@@ -240,3 +240,31 @@ func TestBar3StoreAloneCannotEnroll(t *testing.T) {
 	}
 	t.Logf("bar 3: %d store artifacts presented as invites, %d admitted (want 0); the live bearer exists only outside the store [sha256 preimage: mechanism-argument]", len(haul), admitted)
 }
+
+// TestCreateUserIdempotentNoOrphan: a duplicate CreateUser (an
+// idempotent re-seed) fails cleanly and leaves exactly one user record
+// — the username index is the guard, written before the record, so a
+// taken name never orphans a second record.
+func TestCreateUserIdempotentNoOrphan(t *testing.T) {
+	ctx := context.Background()
+	_, lc := setup(t)
+	if _, err := lc.CreateUser(ctx, "owner", "Owner", "admin"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := lc.CreateUser(ctx, "owner", "Owner", "admin"); err == nil {
+		t.Fatal("a duplicate username was accepted")
+	}
+	users, err := lc.Users(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	n := 0
+	for _, u := range users {
+		if u.Username == "owner" {
+			n++
+		}
+	}
+	if n != 1 {
+		t.Fatalf("found %d owner records after a duplicate create, want 1", n)
+	}
+}
