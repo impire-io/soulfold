@@ -43,7 +43,7 @@ func TestAdminConsole(t *testing.T) {
 		t.Fatal(err)
 	}
 	page := body(t, resp)
-	if !strings.Contains(page, "Sign in with the passkey") && !strings.Contains(page, "administrator") {
+	if !strings.Contains(page, "Administrator sign-in") {
 		t.Fatalf("unauthenticated /admin/ did not render the login page:\n%s", page[:clip(300, len(page))])
 	}
 	if strings.Contains(page, "Add a person") {

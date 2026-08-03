@@ -1,54 +1,30 @@
 package adminui
 
-import "html/template"
+import (
+	"html/template"
 
-// The console's two server-rendered pages. The style is inline and
-// minimal — the fold ships no asset pipeline (constitution III). The
-// login page carries the one script the console needs: the WebAuthn
-// assertion (D9's stated exception).
+	"github.com/impire-io/soulfold/internal/webstyle"
+)
 
-const style = `<style>
-:root{color-scheme:dark}
-body{margin:0;background:#0d1015;color:#dfe5ee;font:15px/1.6 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif}
-main{max-width:920px;margin:0 auto;padding:40px 24px 80px}
-h1{font-size:1.5rem;letter-spacing:-.02em;margin:0 0 4px}
-h2{font-size:.72rem;text-transform:uppercase;letter-spacing:.14em;color:#8a94a6;margin:38px 0 12px}
-a{color:#a78bfa}
-.top{display:flex;align-items:baseline;justify-content:space-between;gap:16px;border-bottom:1px solid #232c3b;padding-bottom:14px}
-.top .who{font:.72rem ui-monospace,Menlo,monospace;color:#5c6577}
-.flash{margin:16px 0;padding:12px 14px;border:1px solid #232c3b;border-left:2px solid #a78bfa;border-radius:8px;background:#12161d;color:#dfe5ee;font-size:.9rem}
-.invite{margin:16px 0;padding:12px 14px;border:1px solid #2dd4bf55;border-radius:8px;background:#0f1a19;font-size:.9rem;word-break:break-all}
-.invite code{color:#2dd4bf}
-table{width:100%;border-collapse:collapse;font-size:.9rem}
-th,td{text-align:left;padding:9px 10px;border-bottom:1px solid #1b2230;vertical-align:top}
-th{font:.68rem ui-monospace,Menlo,monospace;text-transform:uppercase;letter-spacing:.1em;color:#5c6577}
-td .mono{font:.82rem ui-monospace,Menlo,monospace;color:#8a94a6}
-.pill{display:inline-block;font:.7rem ui-monospace,Menlo,monospace;padding:1px 7px;border-radius:999px;border:1px solid #232c3b;color:#8a94a6}
-.pill.active{color:#2dd4bf;border-color:#2dd4bf55}
-.pill.disabled{color:#fb7185;border-color:#fb718555}
-form.inline{display:inline}
-input,button,textarea{font:inherit}
-input,textarea{background:#0b0e13;border:1px solid #232c3b;border-radius:6px;color:#dfe5ee;padding:6px 9px}
-button{background:#a78bfa;color:#0b0e13;border:0;border-radius:6px;padding:6px 12px;font-weight:600;cursor:pointer}
-button.ghost{background:transparent;border:1px solid #232c3b;color:#8a94a6;font-weight:400}
-.card{border:1px solid #232c3b;border-radius:10px;background:#12161d;padding:18px 18px;margin:14px 0}
-.card h3{margin:0 0 12px;font-size:.95rem}
-.row{display:flex;gap:10px;flex-wrap:wrap;align-items:end}
-.row label{display:flex;flex-direction:column;gap:4px;font:.7rem ui-monospace,Menlo,monospace;color:#8a94a6}
-.msg{color:#fb7185;margin:12px 0}
-.center{max-width:400px;margin:12vh auto;text-align:center}
-</style>`
+// The console's two server-rendered pages, on the shared fold theme
+// (internal/webstyle). The login page carries the one script the
+// console needs — the WebAuthn assertion (D9's stated exception).
 
-var loginTmpl = template.Must(template.New("adminlogin").Parse(`<!doctype html>
-<meta charset="utf-8"><title>admin · soulfold</title>` + style + `
-<main><div class="center">
-<h1>soulfold admin</h1>
-<p style="color:#8a94a6">Sign in with the passkey of an administrator.</p>
-<form id="f" class="row" style="justify-content:center">
-<label>Username <input id="username" autocomplete="username webauthn" autofocus required></label>
-<button type="submit">Sign in</button>
+const brand = `<a class="brand" href="/admin/"><span class="dot"></span><b>soulfold</b><span class="tag">admin</span></a>`
+
+var loginTmpl = template.Must(template.New("adminlogin").Parse(
+	webstyle.Head("admin · soulfold") + `<body><main><div class="center">
+<div class="bar">` + brand + `</div>
+<div class="card">
+<h1>Administrator sign-in</h1>
+<p class="lede">Use the passkey of a user in the <b>admin</b> group.</p>
+<form id="f">
+<label class="field">Username <input id="username" autocomplete="username webauthn" autofocus required></label>
+<button class="btn" type="submit">Sign in with a passkey</button>
 </form>
 <p id="msg" class="msg"></p>
+</div>
+<p class="foot">soulfold · the door of the soulsystem</p>
 </div></main>
 <script>
 const b64u={dec:s=>Uint8Array.from(atob(s.replace(/-/g,'+').replace(/_/g,'/')),c=>c.charCodeAt(0)),
@@ -74,80 +50,94 @@ document.getElementById('f').addEventListener('submit',async ev=>{
   window.location=(await fr.json()).redirect;
  }catch(e){msg.textContent='Sign-in failed: '+e.message;}
 });
-</script>`))
+</script></body></html>`))
 
-var dashTmpl = template.Must(template.New("adminmap").Parse(`<!doctype html>
-<meta charset="utf-8"><title>admin · soulfold</title>` + style + `
-<main>
-<div class="top">
-  <div><h1>soulfold admin</h1></div>
-  <div class="who">signed in as {{.Admin}} ·
-    <form class="inline" method="post" action="/admin/logout"><button class="ghost" type="submit">sign out</button></form>
+var dashTmpl = template.Must(template.New("adminmap").Parse(
+	webstyle.Head("admin · soulfold") + `<body><main>
+<div class="bar">
+  ` + brand + `
+  <div class="who">signed in as {{.Admin}}
+    <form class="inline" method="post" action="/admin/logout"><button class="btn ghost" type="submit">sign out</button></form>
   </div>
 </div>
 {{if .Msg}}<div class="flash">{{.Msg}}</div>{{end}}
-{{if .Invite}}<div class="invite">enrollment link — copy it now, it is shown once:<br><code>{{.Invite}}</code></div>{{end}}
+{{if .Invite}}<div class="reveal"><span class="k">enrolment link — copy it now, shown once</span><code>{{.Invite}}</code></div>{{end}}
 
-<h2>People</h2>
+<p class="eyebrow">people <span class="muted">· who exists, and what their tokens carry</span></p>
+<div class="tablewrap">
 <table>
-<tr><th>user</th><th>groups</th><th>passkeys</th><th>status</th><th>actions</th></tr>
+<thead><tr><th>user</th><th>groups</th><th>passkeys</th><th>status</th><th>actions</th></tr></thead>
+<tbody>
 {{range .Users}}<tr>
- <td>{{.Username}}{{if .Display}}<div class="mono">{{.Display}}</div>{{end}}</td>
+ <td><div class="u-name">{{.Username}}</div>{{if .Display}}<div class="u-sub">{{.Display}}</div>{{end}}</td>
  <td>
-   <form class="inline" method="post" action="/admin/users/{{.Username}}/groups">
+   <form class="rowform" method="post" action="/admin/users/{{.Username}}/groups">
      <input type="hidden" name="csrf" value="{{$.CSRF}}">
-     <input name="groups" value="{{.Groups}}" size="20" placeholder="none">
-     <button class="ghost" type="submit">save</button>
+     <input name="groups" value="{{.Groups}}" size="18" placeholder="none">
+     <button class="btn ghost" type="submit">save</button>
    </form>
  </td>
- <td class="mono">{{.Credentials}}</td>
- <td>{{if eq .Status "active"}}<span class="pill active">active</span>{{else}}<span class="pill disabled">disabled</span>{{end}}</td>
- <td>
+ <td class="count">{{.Credentials}}</td>
+ <td>{{if eq .Status "active"}}<span class="pill ok">active</span>{{else}}<span class="pill off">disabled</span>{{end}}</td>
+ <td><div class="actions">
    <form class="inline" method="post" action="/admin/users/{{.Username}}/invite">
-     <input type="hidden" name="csrf" value="{{$.CSRF}}"><button class="ghost" type="submit">invite</button>
+     <input type="hidden" name="csrf" value="{{$.CSRF}}"><button class="btn ghost" type="submit">invite</button>
    </form>
    <form class="inline" method="post" action="/admin/users/{{.Username}}/status">
      <input type="hidden" name="csrf" value="{{$.CSRF}}">
      <input type="hidden" name="status" value="{{if eq .Status "active"}}disabled{{else}}active{{end}}">
-     <button class="ghost" type="submit">{{if eq .Status "active"}}disable{{else}}enable{{end}}</button>
+     <button class="btn danger ghost" type="submit">{{if eq .Status "active"}}disable{{else}}enable{{end}}</button>
    </form>
- </td>
+ </div></td>
 </tr>{{end}}
+</tbody>
 </table>
-
-<div class="card">
-  <h3>Add a person</h3>
-  <form class="row" method="post" action="/admin/users">
-    <input type="hidden" name="csrf" value="{{.CSRF}}">
-    <label>username <input name="username" required></label>
-    <label>display name <input name="display_name"></label>
-    <label>groups <input name="groups" placeholder="engineering admin"></label>
-    <button type="submit">Create</button>
-  </form>
-  <p class="mono" style="color:#5c6577;margin:10px 0 0">They sign in only after you send them an invite — the “invite” button mints a single-use enrolment link.</p>
 </div>
 
-<h2>Groups <span class="mono" style="color:#5c6577">(names surface as token roles)</span></h2>
-<p class="mono" style="color:#8a94a6">{{if .Groups}}{{.Groups}}{{else}}none yet — groups appear when you assign them{{end}}</p>
+<div class="grid2">
+  <div class="card">
+    <h2>Add a person</h2>
+    <p class="hint">They sign in only after you send them an invite — the “invite” button mints a single-use enrolment link.</p>
+    <form method="post" action="/admin/users" style="margin-top:14px;display:flex;flex-direction:column;gap:12px">
+      <input type="hidden" name="csrf" value="{{.CSRF}}">
+      <label class="field">username <input name="username" required></label>
+      <label class="field">display name <input name="display_name"></label>
+      <label class="field">groups <input name="groups" placeholder="engineering admin"></label>
+      <button class="btn" type="submit">Create</button>
+    </form>
+  </div>
+  <div class="card">
+    <h2>Groups</h2>
+    <p class="hint">Group names surface as the roles claim in every token — they name roles, they never carry permissions.</p>
+    <div class="chips" style="margin-top:14px">
+      {{if .Groups}}{{range .GroupList}}<span class="chip{{if eq . "admin"}} admin{{end}}">{{.}}</span>{{end}}{{else}}<span class="u-sub">none yet — groups appear when you assign them</span>{{end}}
+    </div>
+  </div>
+</div>
 
-<h2>OAuth clients</h2>
+<p class="eyebrow">oauth clients <span class="muted">· applications that sign people in through the fold</span></p>
+<div class="tablewrap">
 <table>
-<tr><th>client</th><th>redirect URIs</th><th></th></tr>
+<thead><tr><th>client</th><th>redirect URIs</th><th></th></tr></thead>
+<tbody>
 {{range .Clients}}<tr>
- <td>{{.ClientID}}{{if .Name}}<div class="mono">{{.Name}}</div>{{end}}</td>
- <td class="mono">{{range .RedirectURIs}}{{.}}<br>{{end}}</td>
+ <td><div class="u-name">{{.ClientID}}</div>{{if .Name}}<div class="u-sub">{{.Name}}</div>{{end}}</td>
+ <td class="u-sub">{{range .RedirectURIs}}{{.}}<br>{{end}}</td>
  <td><form class="inline" method="post" action="/admin/clients/{{.ClientID}}/delete">
-   <input type="hidden" name="csrf" value="{{$.CSRF}}"><button class="ghost" type="submit">delete</button></form></td>
-</tr>{{end}}
+   <input type="hidden" name="csrf" value="{{$.CSRF}}"><button class="btn danger ghost" type="submit">delete</button></form></td>
+</tr>{{else}}<tr><td colspan="3" class="u-sub">none registered — hosted MCP clients can register themselves via DCR</td></tr>{{end}}
+</tbody>
 </table>
-<div class="card">
-  <h3>Register a client</h3>
-  <form class="row" method="post" action="/admin/clients">
+</div>
+<div class="card" style="margin-top:16px">
+  <h2>Register a client</h2>
+  <form method="post" action="/admin/clients" style="margin-top:14px;display:flex;flex-wrap:wrap;gap:12px;align-items:end">
     <input type="hidden" name="csrf" value="{{.CSRF}}">
-    <label>client id <input name="client_id" required></label>
-    <label>name <input name="name"></label>
-    <label>redirect URIs <input name="redirect_uris" size="30" placeholder="https://app/cb"></label>
-    <button type="submit">Register</button>
+    <label class="field">client id <input name="client_id" required></label>
+    <label class="field">name <input name="name"></label>
+    <label class="field" style="flex:1;min-width:220px">redirect URIs <input name="redirect_uris" placeholder="https://app.example/cb"></label>
+    <button class="btn" type="submit">Register</button>
   </form>
 </div>
-</main>`))
+<p class="foot">soulfold · the door of the soulsystem</p>
+</main></body></html>`))
