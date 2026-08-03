@@ -14,8 +14,9 @@ The measured gate rides `make test`; this is the human-shaped walk.
 # 3. Mint the bootstrap invite — printed ONCE; the store keeps a digest.
 ./bin/soulfold invite --state-dir ~/.soulfold --username root
 
-# 4. Browser: open  <issuer>/login/?invite=sfi_…  behind any RP's
-#    authorize redirect — one passkey ceremony enrolls AND signs in.
+# 4. Browser: open  <issuer>/enroll?invite=sfi_…  — a standalone page,
+#    no relying party needed. One passkey ceremony and you're enrolled;
+#    an admin lands straight in the console.
 ```
 
 ## Day-to-day (the admin console — a browser and your passkey)

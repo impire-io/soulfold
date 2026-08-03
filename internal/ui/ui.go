@@ -85,6 +85,58 @@ document.getElementById('f').addEventListener('submit', async ev => {
 	errorTmpl = template.Must(template.New("error").Parse(`<!doctype html>
 <meta charset="utf-8"><title>error — soulfold</title>
 <main><h1>Sign-in failed</h1><p>{{.Message}}</p></main>`))
+
+	// The standalone enrolment page an invite link points at directly:
+	// register a passkey against the invite, no relying party involved.
+	enrollTmpl = template.Must(template.New("enroll").Parse(`<!doctype html>
+<meta charset="utf-8"><title>enroll a passkey — soulfold</title>
+<main><h1>Enroll your passkey</h1>
+<p>Choose a username and create a passkey — this is the only credential you will ever need here.</p>
+<form id="f">
+<input type="hidden" id="invite" value="{{.Invite}}">
+<label>Username <input id="username" autocomplete="username webauthn" autofocus required></label>
+<button type="submit">Create passkey</button>
+</form>
+<p id="msg"></p>
+<script>
+const b64u = {
+  dec: s => Uint8Array.from(atob(s.replace(/-/g,'+').replace(/_/g,'/')), c => c.charCodeAt(0)),
+  enc: b => btoa(String.fromCharCode(...new Uint8Array(b))).replace(/\+/g,'-').replace(/\//g,'_').replace(/=+$/,''),
+};
+document.getElementById('f').addEventListener('submit', async ev => {
+  ev.preventDefault();
+  const msg = document.getElementById('msg');
+  try {
+    const q = new URLSearchParams({
+      username: document.getElementById('username').value,
+      invite: document.getElementById('invite').value,
+    });
+    const beginResp = await fetch('/enroll/begin?' + q, {method: 'POST'});
+    if (!beginResp.ok) throw new Error(await beginResp.text());
+    const begin = await beginResp.json();
+    const pk = begin.options.publicKey;
+    pk.challenge = b64u.dec(pk.challenge);
+    if (pk.user) pk.user.id = b64u.dec(pk.user.id);
+    for (const list of [pk.allowCredentials, pk.excludeCredentials])
+      if (list) list.forEach(c => c.id = b64u.dec(c.id));
+    const cred = await navigator.credentials.create({publicKey: pk});
+    const body = {id: cred.id, rawId: b64u.enc(cred.rawId), type: cred.type, response: {
+      attestationObject: b64u.enc(cred.response.attestationObject),
+      clientDataJSON: b64u.enc(cred.response.clientDataJSON)}};
+    q.set('ceremonyID', begin.ceremonyID);
+    const fin = await fetch('/enroll/finish?' + q, {method: 'POST',
+      headers: {'Content-Type': 'application/json'}, body: JSON.stringify(body)});
+    if (!fin.ok) throw new Error(await fin.text());
+    window.location = (await fin.json()).redirect;
+  } catch (e) { msg.textContent = 'Enrolment failed: ' + e.message; }
+});
+</script></main>`))
+
+	enrollDoneTmpl = template.Must(template.New("enrolldone").Parse(`<!doctype html>
+<meta charset="utf-8"><title>enrolled — soulfold</title>
+<main><h1>Your passkey is enrolled.</h1>
+<p>You can now sign in with it wherever this identity provider is used.
+Administrators can open the <a href="/admin">admin console</a>.</p></main>`))
 )
 
 // Handler serves the sign-in surface against the store. Callback is
@@ -97,12 +149,84 @@ type Handler struct {
 	Callback func(ctx context.Context, authRequestID string) string
 }
 
-// Register mounts the surface on mux: the two pages plus the two
-// ceremony endpoints the login page's script drives.
+// Register mounts the surface on mux: the login pages the OIDC flow
+// redirects into, and a standalone enrolment page an invite link points
+// at directly (no relying party, no auth request — the invite is the
+// whole capability).
 func (h *Handler) Register(mux *http.ServeMux) {
 	mux.HandleFunc("GET /login/", h.getLogin)
 	mux.HandleFunc("POST /login/begin", h.postBegin)
 	mux.HandleFunc("POST /login/finish", h.postFinish)
+	mux.HandleFunc("GET /enroll", h.getEnroll)
+	mux.HandleFunc("POST /enroll/begin", h.postEnrollBegin)
+	mux.HandleFunc("POST /enroll/finish", h.postEnrollFinish)
+}
+
+// getEnroll renders the standalone enrolment page for an invite link
+// (`/enroll?invite=sfi_…`). With `?done=1` it renders the confirmation.
+func (h *Handler) getEnroll(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	if r.URL.Query().Get("done") != "" {
+		if err := enrollDoneTmpl.Execute(w, nil); err != nil {
+			http.Error(w, "render failed", http.StatusInternalServerError)
+		}
+		return
+	}
+	invite := r.URL.Query().Get("invite")
+	if invite == "" {
+		h.renderError(w, http.StatusBadRequest, "this enrolment link is missing its invite")
+		return
+	}
+	if err := enrollTmpl.Execute(w, struct{ Invite string }{invite}); err != nil {
+		http.Error(w, "render failed", http.StatusInternalServerError)
+	}
+}
+
+// enrollOrigin is the standalone enrolment's outer wall: the invite is
+// the capability, and a cross-origin submission is refused (D13's Origin
+// half; there is no session-borne CSRF token yet).
+func (h *Handler) enrollOrigin(r *http.Request) bool {
+	origin := r.Header.Get("Origin")
+	return origin == "" || origin == h.Issuer.Scheme+"://"+h.Issuer.Host
+}
+
+func (h *Handler) postEnrollBegin(w http.ResponseWriter, r *http.Request) {
+	if !h.enrollOrigin(r) {
+		http.Error(w, "cross-origin request refused", http.StatusForbidden)
+		return
+	}
+	ceremonyID, kind, options, err := h.Passkeys.Begin(r.Context(),
+		r.URL.Query().Get("username"), "", r.URL.Query().Get("invite"))
+	if err != nil || kind != "register" {
+		http.Error(w, "this invite is not valid for that user", http.StatusUnauthorized)
+		return
+	}
+	w.Header().Set("Content-Type", "application/json")
+	if err := json.NewEncoder(w).Encode(map[string]any{
+		"ceremonyID": ceremonyID, "options": json.RawMessage(options),
+	}); err != nil {
+		http.Error(w, "encode failed", http.StatusInternalServerError)
+	}
+}
+
+func (h *Handler) postEnrollFinish(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	if !h.enrollOrigin(r) {
+		http.Error(w, "cross-origin request refused", http.StatusForbidden)
+		return
+	}
+	user, _, err := h.Passkeys.Finish(ctx, r.URL.Query().Get("ceremonyID"), r)
+	if err != nil {
+		http.Error(w, "enrolment failed", http.StatusUnauthorized)
+		return
+	}
+	// A convenience session so an admin lands straight in the console;
+	// everyone else gets the confirmation page.
+	_, _ = websession.Set(ctx, h.St, w, r, user.ID)
+	w.Header().Set("Content-Type", "application/json")
+	if err := json.NewEncoder(w).Encode(map[string]string{"redirect": "/enroll?done=1"}); err != nil {
+		http.Error(w, "encode failed", http.StatusInternalServerError)
+	}
 }
 
 func (h *Handler) renderError(w http.ResponseWriter, status int, msg string) {
