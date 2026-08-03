@@ -39,6 +39,7 @@ func TestEmbedGate(t *testing.T) {
 	defer cancel()
 	ready := make(chan string, 1)
 	runErr := make(chan error, 1)
+	invites := make(chan string, 1)
 	go func() {
 		runErr <- embed.Run(ctx, embed.Options{
 			Issuer:        issuer,
@@ -49,7 +50,8 @@ func TestEmbedGate(t *testing.T) {
 			SeedUsers: []embed.SeedUser{
 				{Username: "owner", DisplayName: "The Owner", Roles: []string{"realm"}},
 			},
-			Ready: func(a string) { ready <- a },
+			InviteSink: func(_, token string) { invites <- token },
+			Ready:      func(a string) { ready <- a },
 		})
 	}()
 	select {
@@ -95,8 +97,15 @@ func TestEmbedGate(t *testing.T) {
 		t.Fatalf("DCR: status %d client %q", regResp.StatusCode, reg.ClientID)
 	}
 
-	// The registered client signs the seeded user in with a passkey.
-	token := signIn(t, ctx, issuer, rp, reg.ClientID, redirect, "owner")
+	// The registered client enrolls the seeded user with a passkey —
+	// against the founding invite the embed seam delivered (D20/D22).
+	var ownerInvite string
+	select {
+	case ownerInvite = <-invites:
+	case <-time.After(5 * time.Second):
+		t.Fatal("the embed seam delivered no founding invite")
+	}
+	token := signIn(t, ctx, issuer, rp, reg.ClientID, redirect, "owner", ownerInvite)
 
 	// The access token carries the fixed audience and the roles claim —
 	// verified against the fold's own JWKS, all public surfaces.
@@ -134,8 +143,9 @@ func TestEmbedGate(t *testing.T) {
 }
 
 // signIn walks authorize → passkey ceremony → callback → token with the
-// public authtest authenticator — the scripted browser.
-func signIn(t *testing.T, ctx context.Context, issuer string, rp *gooidc.Provider, clientID, redirect, username string) string {
+// public authtest authenticator — the scripted browser. A non-empty
+// invite makes the ceremony an enrollment.
+func signIn(t *testing.T, ctx context.Context, issuer string, rp *gooidc.Provider, clientID, redirect, username, invite string) string {
 	t.Helper()
 	auth, err := authtest.New("127.0.0.1", issuer)
 	if err != nil {
@@ -165,7 +175,7 @@ func signIn(t *testing.T, ctx context.Context, issuer string, rp *gooidc.Provide
 	id := resp.Request.URL.Query().Get("authRequestID")
 	csrf := extract(t, string(page), "csrf")
 
-	q := url.Values{"authRequestID": {id}, "csrf": {csrf}, "username": {username}}
+	q := url.Values{"authRequestID": {id}, "csrf": {csrf}, "username": {username}, "invite": {invite}}
 	beginResp, err := httpc.Post(issuer+"/login/begin?"+q.Encode(), "", nil)
 	if err != nil {
 		t.Fatal(err)

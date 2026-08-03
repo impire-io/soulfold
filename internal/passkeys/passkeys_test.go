@@ -86,13 +86,23 @@ func TestRegisterThenLogin(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	// First touch: no credential yet, the ceremony is a registration.
-	cerID, kind, options, err := svc.Begin(ctx, "alice", "authreq-1")
+	// D20: without an invite, a credential-less user cannot begin any
+	// ceremony — there is no open-enrollment lane.
+	if _, _, _, err := svc.Begin(ctx, "alice", "authreq-0", ""); err == nil {
+		t.Fatal("a credential-less user began a ceremony without an invite")
+	}
+
+	// With a live invite the ceremony is a registration.
+	invite, err := svc.Lifecycle.MintInvite(ctx, "alice", 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	cerID, kind, options, err := svc.Begin(ctx, "alice", "authreq-1", invite)
 	if err != nil {
 		t.Fatal(err)
 	}
 	if kind != "register" {
-		t.Fatalf("first ceremony is %q, want register (passkey-only first touch)", kind)
+		t.Fatalf("invited ceremony is %q, want register", kind)
 	}
 	body, err := auth.CreateResponse(options)
 	if err != nil {
@@ -106,8 +116,8 @@ func TestRegisterThenLogin(t *testing.T) {
 		t.Fatalf("registered %s bound %s, want %s / authreq-1", got.ID, boundReq, user.ID)
 	}
 
-	// Second touch: the ceremony is a login assertion.
-	cerID2, kind2, options2, err := svc.Begin(ctx, "alice", "authreq-2")
+	// Second touch: the ceremony is a login assertion, no invite needed.
+	cerID2, kind2, options2, err := svc.Begin(ctx, "alice", "authreq-2", "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -169,7 +179,11 @@ func TestForeignOriginRefused(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		cerID, _, options, err := svc.Begin(ctx, "bob", "authreq-x")
+		invite, err := svc.Lifecycle.MintInvite(ctx, "bob", 0)
+		if err != nil {
+			t.Fatal(err)
+		}
+		cerID, _, options, err := svc.Begin(ctx, "bob", "authreq-x", invite)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -198,7 +212,11 @@ func TestNoCredentialSecretStored(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	cerID, _, options, err := svc.Begin(ctx, "carol", "authreq-1")
+	invite, err := svc.Lifecycle.MintInvite(ctx, "carol", 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	cerID, _, options, err := svc.Begin(ctx, "carol", "authreq-1", invite)
 	if err != nil {
 		t.Fatal(err)
 	}

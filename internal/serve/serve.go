@@ -19,8 +19,10 @@ import (
 	"github.com/nats-io/nats.go/jetstream"
 	"github.com/zitadel/oidc/v3/pkg/op"
 
+	"github.com/impire-io/soulfold/internal/adminapi"
 	"github.com/impire-io/soulfold/internal/envelope"
 	"github.com/impire-io/soulfold/internal/keys"
+	"github.com/impire-io/soulfold/internal/lifecycle"
 	"github.com/impire-io/soulfold/internal/natsserver"
 	"github.com/impire-io/soulfold/internal/passkeys"
 	"github.com/impire-io/soulfold/internal/provider"
@@ -62,8 +64,9 @@ type Options struct {
 
 // Fold is a running instance.
 type Fold struct {
-	Store *store.Store
-	Keys  *keys.Service
+	Store     *store.Store
+	Keys      *keys.Service
+	Lifecycle *lifecycle.Service
 
 	httpSrv *http.Server
 	ln      net.Listener
@@ -120,6 +123,7 @@ func Open(ctx context.Context, opts Options) (*Fold, error) {
 	}
 	f.Store = st
 	f.Keys = &keys.Service{St: st}
+	f.Lifecycle = &lifecycle.Service{St: st}
 	if err := f.Keys.EnsureFirstKey(ctx); err != nil {
 		f.Close()
 		return nil, err
@@ -142,6 +146,9 @@ func Open(ctx context.Context, opts Options) (*Fold, error) {
 	if opts.EnableDCR {
 		registerDCR(mux, p, opts.Issuer, st)
 	}
+	adminapi.Register(mux, &adminapi.API{
+		Lifecycle: f.Lifecycle, Keys: f.Keys, Issuer: opts.Issuer,
+	})
 
 	listen := opts.Listen
 	if listen == "" {
@@ -208,36 +215,17 @@ func (f *Fold) Close() {
 	}
 }
 
-// SeedUser creates the M1 stand-in user (roadmap: "a seeded user and
-// client standing in for the ceremonies"; M3 replaces seeding with the
-// lifecycle). Roles surface as the token's roles-claim values.
-// The id shape (u-hex, no underscores) is a consumer-proven constraint:
-// it doubles as a soulstream persona name downstream, and that grammar
-// admits lowercase alphanumerics and hyphens only.
+// SeedUser creates a user through the lifecycle (since M3 the "roles"
+// are group memberships — group names surface as roles-claim values).
+// The user cannot sign in until an invite enrolls their first passkey
+// (D20); seeding grants existence, never enrollment.
 func SeedUser(ctx context.Context, st *store.Store, username, displayName string, roles ...string) (store.User, error) {
-	now := store.Now()
-	u := store.User{
-		Schema: 1, ID: "u-" + store.RandID(8), Username: username,
-		DisplayName: displayName, Status: "active", Roles: roles,
-		CreatedAt: now, UpdatedAt: now,
-	}
-	if _, err := st.Create(ctx, st.Users, u.ID, u); err != nil {
-		return store.User{}, err
-	}
-	if _, err := st.Create(ctx, st.Users, store.UsernameIndexKey(username), store.Index{Schema: 1, Target: u.ID}); err != nil {
-		return store.User{}, err
-	}
-	return u, nil
+	lc := &lifecycle.Service{St: st}
+	return lc.CreateUser(ctx, username, displayName, roles...)
 }
 
-// SeedClient creates the M1 stand-in public client.
+// SeedClient creates a public PKCE client through the lifecycle.
 func SeedClient(ctx context.Context, st *store.Store, clientID, name string, redirectURIs []string) (store.Client, error) {
-	c := store.Client{
-		Schema: 1, ClientID: clientID, Name: name,
-		RedirectURIs: redirectURIs, Public: true, CreatedAt: store.Now(),
-	}
-	if _, err := st.Create(ctx, st.Clients, c.ClientID, c); err != nil {
-		return store.Client{}, err
-	}
-	return c, nil
+	lc := &lifecycle.Service{St: st}
+	return lc.RegisterClient(ctx, clientID, name, redirectURIs)
 }

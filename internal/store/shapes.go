@@ -24,9 +24,35 @@ type User struct {
 	Credentials []json.RawMessage `json:"credentials,omitempty"`
 	// Roles surface as the token's roles-claim values (constitution
 	// II: they *name* roles declared on the consumer's side — Entra's
-	// app-role shape — and never carry permissions). M3's groups will
-	// populate this from membership; until then seeding does.
+	// app-role shape — and never carry permissions). Since M3, Groups
+	// is the lived field (group names ARE the roles-claim values);
+	// Roles remains readable for pre-M3 records (D2: additive only,
+	// fields never removed) and the claim is the union of both.
 	Roles []string `json:"roles,omitempty"`
+	// Groups is the user's group memberships (M3). Group names surface
+	// as roles-claim values; membership changes surface in the next
+	// issued token.
+	Groups []string `json:"groups,omitempty"`
+}
+
+// Group is a named group (M3): its name is a roles-claim value —
+// nothing more. It carries no permissions (constitution II).
+type Group struct {
+	Schema    int    `json:"schema"`
+	Name      string `json:"name"`
+	CreatedAt string `json:"created_at"`
+}
+
+// Invite is a single-use enrollment grant (M3, D20–D21): the KV key is
+// the DIGEST of the bearer token (D12 — the token itself exists
+// nowhere server-side); the record binds the target user and flips
+// consumed by CAS in the same act that binds the credential.
+type Invite struct {
+	Schema    int    `json:"schema"`
+	UserID    string `json:"user_id"`
+	Consumed  bool   `json:"consumed,omitempty"`
+	CreatedAt string `json:"created_at"`
+	ExpiresAt string `json:"expires_at"`
 }
 
 // Client is a registered OAuth client. M1 clients are public-with-PKCE;
@@ -98,6 +124,8 @@ type BrowserSession struct {
 // Ceremony is a WebAuthn ceremony in flight (M2): the library's
 // SessionData between Begin and Finish, bound to the user and the auth
 // request it will complete. Short-lived, sealed like everything else.
+// InviteKey (M3, additive) carries the invite a registration runs
+// against — the record's digest-derived KV key, never the bearer.
 type Ceremony struct {
 	Schema        int             `json:"schema"`
 	ID            string          `json:"id"`
@@ -105,6 +133,7 @@ type Ceremony struct {
 	UserID        string          `json:"user_id"`
 	AuthRequestID string          `json:"auth_request_id"`
 	SessionData   json.RawMessage `json:"session_data"`
+	InviteKey     string          `json:"invite_key,omitempty"`
 	CreatedAt     string          `json:"created_at"`
 	ExpiresAt     string          `json:"expires_at"`
 }

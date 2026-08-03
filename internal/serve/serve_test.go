@@ -179,6 +179,12 @@ func TestM1Gate(t *testing.T) {
 	if _, err := serve.SeedClient(ctx, fold.Store, clientID, "gate", []string{redirectURI}); err != nil {
 		t.Fatal(err)
 	}
+	// Enrollment rides an invite since M3 (D20): the first sign-in
+	// registers against it, every later one asserts.
+	invite1, err := fold.Lifecycle.MintInvite(ctx, username, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	// The stock RP: discovery, endpoints, verifier — all go-oidc.
 	rpProvider, err := gooidc.NewProvider(ctx, issuer)
@@ -201,9 +207,9 @@ func TestM1Gate(t *testing.T) {
 
 	// ceremony drives begin → authenticator → finish and returns the
 	// callback redirect the page script would follow.
-	ceremony := func(b *browser, id, csrf string) string {
+	ceremony := func(b *browser, id, csrf, invite string) string {
 		t.Helper()
-		q := url.Values{"authRequestID": {id}, "csrf": {csrf}, "username": {username}}
+		q := url.Values{"authRequestID": {id}, "csrf": {csrf}, "username": {username}, "invite": {invite}}
 		beginResp := b.postForm(t, issuer+"/login/begin?"+q.Encode(), nil, nil)
 		var begin struct {
 			CeremonyID string          `json:"ceremonyID"`
@@ -239,7 +245,7 @@ func TestM1Gate(t *testing.T) {
 
 	// fullSignIn drives authorize → ceremony → callback → RP redirect →
 	// token exchange, with a fresh PKCE verifier per flow.
-	fullSignIn := func(b *browser) (*oauth2.Token, string) {
+	fullSignIn := func(b *browser, invite string) (*oauth2.Token, string) {
 		t.Helper()
 		pkce := oauth2.GenerateVerifier()
 		resp := b.get(t, cfg.AuthCodeURL("state-1", oauth2.S256ChallengeOption(pkce)))
@@ -252,7 +258,7 @@ func TestM1Gate(t *testing.T) {
 			page := body(t, resp)
 			id := resp.Request.URL.Query().Get("authRequestID")
 			csrf := extractField(t, page, "csrf")
-			redirect := ceremony(b, id, csrf)
+			redirect := ceremony(b, id, csrf, invite)
 			if !strings.HasPrefix(redirect, "http") {
 				redirect = issuer + redirect
 			}
@@ -296,7 +302,7 @@ func TestM1Gate(t *testing.T) {
 
 	// --- SC-001: the happy path -----------------------------------------
 	b1 := newBrowser(t)
-	tok, _ := fullSignIn(b1)
+	tok, _ := fullSignIn(b1, invite1)
 	subject := verifyTokens(tok)
 	if !strings.HasPrefix(subject, "u-") {
 		t.Fatalf("subject %q is not the seeded user", subject)
@@ -304,7 +310,7 @@ func TestM1Gate(t *testing.T) {
 
 	// Single-use code: replaying the exchange fails structurally.
 	b2 := newBrowser(t)
-	tok2, code2 := fullSignIn(b2)
+	tok2, code2 := fullSignIn(b2, "")
 	verifyTokens(tok2)
 	if _, err := cfg.Exchange(ctx, code2, oauth2.VerifierOption("wrong")); err == nil {
 		t.Fatal("second redemption of a code succeeded")
@@ -352,7 +358,7 @@ func TestM1Gate(t *testing.T) {
 	}
 	// The legitimate ceremony still completes (refusals never consumed
 	// the one-shot token).
-	if redirect := ceremony(b3, id, csrf); !strings.Contains(redirect, "id=") {
+	if redirect := ceremony(b3, id, csrf, ""); !strings.Contains(redirect, "id=") {
 		t.Fatalf("legitimate ceremony after forgeries got %q", redirect)
 	}
 
@@ -364,7 +370,7 @@ func TestM1Gate(t *testing.T) {
 	resp4 := b4.get(t, cfg.AuthCodeURL("state-4", oauth2.S256ChallengeOption(pkce4)))
 	page4 := body(t, resp4)
 	id4 := resp4.Request.URL.Query().Get("authRequestID")
-	redirect4 := ceremony(b4, id4, extractField(t, page4, "csrf"))
+	redirect4 := ceremony(b4, id4, extractField(t, page4, "csrf"), "")
 	if !strings.HasPrefix(redirect4, "http") {
 		redirect4 = issuer + redirect4
 	}
@@ -388,7 +394,7 @@ func TestM1Gate(t *testing.T) {
 	// b1 signed in before the restart; its cookie now completes a new
 	// sign-in with zero pages rendered.
 	pagesBefore := countPages(b1)
-	tok5, _ := fullSignIn(b1)
+	tok5, _ := fullSignIn(b1, "")
 	verifyTokens(tok5)
 	if countPages(b1) != pagesBefore {
 		t.Errorf("browser-session sign-in rendered pages: %v", b1.htmlPages)

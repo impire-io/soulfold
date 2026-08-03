@@ -19,11 +19,14 @@ make build
 # (localhost is a WebAuthn "secure context" without TLS — good for the
 #  runbook, not for a deployment.)
 
-# 2. Seed a user and a client (separate store: stop serve first, or use
-#    an external NATS for both commands — see spec 001 quickstart).
+# 2. Seed a user and a client, and mint their invite (separate store:
+#    stop serve first, or use an external NATS for all commands).
+#    Since M3 (005-the-lifecycle) enrollment REQUIRES the invite —
+#    open the login page as <issuer>/login/?invite=sfi_… in step 3.
 ./bin/soulfold seed user   --state-dir /tmp/fold-runbook --username you
 ./bin/soulfold seed client --state-dir /tmp/fold-runbook --client-id demo \
   --redirect-uri http://127.0.0.1:9009/cb
+./bin/soulfold invite --state-dir /tmp/fold-runbook --username you
 
 # 3. Point any OIDC RP at http://localhost:8378 (client `demo`,
 #    code+PKCE, scope openid) — or hand-build the authorize URL and

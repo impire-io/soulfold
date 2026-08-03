@@ -33,12 +33,13 @@ var (
 	// unreachable without it (D9's stated exception).
 	loginTmpl = template.Must(template.New("login").Parse(`<!doctype html>
 <meta charset="utf-8"><title>sign in — soulfold</title>
-<main><h1>Sign in</h1>
+<main><h1>{{if .Invite}}Enroll your passkey{{else}}Sign in{{end}}</h1>
 <form id="f">
 <input type="hidden" id="authRequestID" value="{{.AuthRequestID}}">
 <input type="hidden" id="csrf" value="{{.CSRF}}">
+<input type="hidden" id="invite" value="{{.Invite}}">
 <label>Username <input id="username" autocomplete="username webauthn" autofocus required></label>
-<button type="submit">Sign in with a passkey</button>
+<button type="submit">{{if .Invite}}Enroll and sign in{{else}}Sign in with a passkey{{end}}</button>
 </form>
 <p id="msg"></p>
 <script>
@@ -54,6 +55,7 @@ document.getElementById('f').addEventListener('submit', async ev => {
       authRequestID: document.getElementById('authRequestID').value,
       csrf: document.getElementById('csrf').value,
       username: document.getElementById('username').value,
+      invite: document.getElementById('invite').value,
     });
     const beginResp = await fetch('/login/begin?' + q, {method: 'POST'});
     if (!beginResp.ok) throw new Error(await beginResp.text());
@@ -141,7 +143,9 @@ func (h *Handler) getLogin(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
-	if err := loginTmpl.Execute(w, struct{ AuthRequestID, CSRF string }{id, sess.CSRF}); err != nil {
+	if err := loginTmpl.Execute(w, struct{ AuthRequestID, CSRF, Invite string }{
+		id, sess.CSRF, r.URL.Query().Get("invite"),
+	}); err != nil {
 		h.renderError(w, http.StatusInternalServerError, "render failed")
 	}
 }
@@ -178,9 +182,10 @@ func (h *Handler) postBegin(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), http.StatusForbidden)
 		return
 	}
-	ceremonyID, kind, options, err := h.Passkeys.Begin(r.Context(), r.URL.Query().Get("username"), sess.ID)
+	ceremonyID, kind, options, err := h.Passkeys.Begin(r.Context(),
+		r.URL.Query().Get("username"), sess.ID, r.URL.Query().Get("invite"))
 	if err != nil {
-		http.Error(w, "unknown user", http.StatusUnauthorized)
+		http.Error(w, "unknown user or invite", http.StatusUnauthorized)
 		return
 	}
 	w.Header().Set("Content-Type", "application/json")
