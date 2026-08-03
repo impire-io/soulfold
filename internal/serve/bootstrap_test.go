@@ -149,14 +149,14 @@ func TestBar1BootstrapCountedAndClosed(t *testing.T) {
 		return resp
 	}
 
-	r1 := adminReq(http.MethodPost, "/admin/users", map[string]any{
+	r1 := adminReq(http.MethodPost, "/api/admin/users", map[string]any{
 		"username": "erin", "display_name": "Erin", "groups": []string{"engineering"},
 	})
 	drain(r1)
 	if r1.StatusCode != http.StatusCreated {
 		t.Fatalf("admin create user: %d", r1.StatusCode)
 	}
-	r2 := adminReq(http.MethodPost, "/admin/invites", map[string]any{"username": "erin"})
+	r2 := adminReq(http.MethodPost, "/api/admin/invites", map[string]any{"username": "erin"})
 	var inv struct {
 		Invite string `json:"invite"`
 	}
@@ -174,7 +174,7 @@ func TestBar1BootstrapCountedAndClosed(t *testing.T) {
 		t.Fatalf("first token roles %v, want [engineering]", roles)
 	}
 
-	r3 := adminReq(http.MethodPost, "/admin/users/erin/groups", map[string]any{
+	r3 := adminReq(http.MethodPost, "/api/admin/users/erin/groups", map[string]any{
 		"groups": []string{"platform"},
 	})
 	drain(r3)
@@ -187,7 +187,7 @@ func TestBar1BootstrapCountedAndClosed(t *testing.T) {
 	}
 
 	// ---- The admin surface refuses non-admin bearers and bare requests.
-	req, _ := http.NewRequest(http.MethodGet, issuer+"/admin/users", nil)
+	req, _ := http.NewRequest(http.MethodGet, issuer+"/api/admin/users", nil)
 	req.Header.Set("Authorization", "Bearer "+erinTok2)
 	r4, err := http.DefaultClient.Do(req)
 	if err != nil {
@@ -197,7 +197,7 @@ func TestBar1BootstrapCountedAndClosed(t *testing.T) {
 	if r4.StatusCode != http.StatusForbidden {
 		t.Fatalf("a non-admin token reached the admin surface: %d", r4.StatusCode)
 	}
-	r5, err := http.Get(issuer + "/admin/users")
+	r5, err := http.Get(issuer + "/api/admin/users")
 	if err != nil {
 		t.Fatal(err)
 	}

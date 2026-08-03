@@ -1,10 +1,11 @@
-// Package adminapi is M3's admin surface (D24): a JSON API under
-// /admin, no pages (D9's inventory stays {login, error}). The bearer
-// is one of the fold's own access tokens whose roles claim names
-// `admin` — the fold trusts exactly what it tells everyone else to
-// trust (constitution II), verified against its own keys. The one
-// place a bearer secret ever appears in a response is the invite
-// mint, shown once (D21).
+// Package adminapi is the machine half of the admin surface (D24, as
+// split by D25): a JSON API under /api/admin for automation. The
+// bearer is one of the fold's own access tokens whose roles claim
+// names `admin` — the fold trusts exactly what it tells everyone else
+// to trust (constitution II), verified against its own keys. The
+// human half is internal/adminui (a server-rendered console under
+// /admin). The one place a bearer secret ever appears in a response
+// is the invite mint, shown once (D21).
 package adminapi
 
 import (
@@ -32,18 +33,18 @@ type API struct {
 	Issuer    string
 }
 
-// Register mounts the surface on mux.
+// Register mounts the machine API under /api/admin.
 func Register(mux *http.ServeMux, a *API) {
 	guard := a.authenticated
-	mux.HandleFunc("GET /admin/users", guard(a.listUsers))
-	mux.HandleFunc("POST /admin/users", guard(a.createUser))
-	mux.HandleFunc("POST /admin/users/{username}/groups", guard(a.setGroups))
-	mux.HandleFunc("POST /admin/users/{username}/status", guard(a.setStatus))
-	mux.HandleFunc("GET /admin/groups", guard(a.listGroups))
-	mux.HandleFunc("POST /admin/invites", guard(a.mintInvite))
-	mux.HandleFunc("GET /admin/clients", guard(a.listClients))
-	mux.HandleFunc("POST /admin/clients", guard(a.createClient))
-	mux.HandleFunc("DELETE /admin/clients/{id}", guard(a.deleteClient))
+	mux.HandleFunc("GET /api/admin/users", guard(a.listUsers))
+	mux.HandleFunc("POST /api/admin/users", guard(a.createUser))
+	mux.HandleFunc("POST /api/admin/users/{username}/groups", guard(a.setGroups))
+	mux.HandleFunc("POST /api/admin/users/{username}/status", guard(a.setStatus))
+	mux.HandleFunc("GET /api/admin/groups", guard(a.listGroups))
+	mux.HandleFunc("POST /api/admin/invites", guard(a.mintInvite))
+	mux.HandleFunc("GET /api/admin/clients", guard(a.listClients))
+	mux.HandleFunc("POST /api/admin/clients", guard(a.createClient))
+	mux.HandleFunc("DELETE /api/admin/clients/{id}", guard(a.deleteClient))
 }
 
 // authenticated verifies the bearer against the fold's own published
