@@ -77,7 +77,7 @@ func TestAdminConsole(t *testing.T) {
 
 	// Mint erin's invite from the console — the enrol link is shown once.
 	after := consolePost(t, adminClient, issuer+"/admin/users/erin/invite", url.Values{"csrf": {csrf}})
-	if !strings.Contains(after, "/login/?invite=sfi_") {
+	if !strings.Contains(after, "/enroll?invite=sfi_") {
 		t.Fatalf("the console did not surface an enrolment link:\n%s", after[:clip(400, len(after))])
 	}
 

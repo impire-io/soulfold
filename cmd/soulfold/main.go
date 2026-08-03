@@ -82,7 +82,7 @@ func cmdInvite(args []string) error {
 	if err != nil {
 		return err
 	}
-	fmt.Printf("invite for %s (single use, shown once):\n  %s\nenroll at: <issuer>/login/?invite=%s\n", *username, token, token)
+	fmt.Printf("invite for %s (single use, shown once):\n  %s\nenroll at: <issuer>/enroll?invite=%s\n", *username, token, token)
 	return nil
 }
 

@@ -31,12 +31,12 @@ var (
 <div class="bar"><a class="brand" href="#"><span class="dot"></span><b>soulfold</b></a></div>
 <div class="card">
 <h1>{{if .Invite}}Enroll your passkey{{else}}Sign in{{end}}</h1>
-<p class="lede">{{if .Invite}}Choose a username and create a passkey — the only credential you'll ever need here.{{else}}Sign in with your passkey.{{end}}</p>
+<p class="lede">{{if .Invite}}You're enrolling as <b>{{.Username}}</b> — create a passkey, the only credential you'll ever need here.{{else}}Sign in with your passkey.{{end}}</p>
 <form id="f">
 <input type="hidden" id="authRequestID" value="{{.AuthRequestID}}">
 <input type="hidden" id="csrf" value="{{.CSRF}}">
 <input type="hidden" id="invite" value="{{.Invite}}">
-<label class="field">Username <input id="username" autocomplete="username webauthn" autofocus required></label>
+<label class="field">Username {{if .Invite}}<input id="username" value="{{.Username}}" readonly>{{else}}<input id="username" autocomplete="username webauthn" autofocus required>{{end}}</label>
 <button class="btn" type="submit">{{if .Invite}}Enroll and sign in{{else}}Sign in with a passkey{{end}}</button>
 </form>
 <p id="msg" class="msg"></p>
@@ -97,15 +97,17 @@ document.getElementById('f').addEventListener('submit', async ev => {
 
 	// The standalone enrolment page an invite link points at directly:
 	// register a passkey against the invite, no relying party involved.
+	// The username is the invite's fact, not the visitor's choice — the
+	// server resolves it and the field is read-only.
 	enrollTmpl = template.Must(template.New("enroll").Parse(
 		webstyle.Head("enroll a passkey — soulfold") + `<body><main><div class="center">
 <div class="bar"><a class="brand" href="#"><span class="dot"></span><b>soulfold</b></a></div>
 <div class="card">
 <h1>Enroll your passkey</h1>
-<p class="lede">Choose a username and create a passkey — the only credential you'll ever need here.</p>
+<p class="lede">You're enrolling as <b>{{.Username}}</b> — create a passkey, the only credential you'll ever need here.</p>
 <form id="f">
 <input type="hidden" id="invite" value="{{.Invite}}">
-<label class="field">Username <input id="username" autocomplete="username webauthn" autofocus required></label>
+<label class="field">Username <input id="username" value="{{.Username}}" readonly></label>
 <button class="btn" type="submit">Create passkey</button>
 </form>
 <p id="msg" class="msg"></p>
@@ -182,7 +184,10 @@ func (h *Handler) Register(mux *http.ServeMux) {
 }
 
 // getEnroll renders the standalone enrolment page for an invite link
-// (`/enroll?invite=sfi_…`). With `?done=1` it renders the confirmation.
+// (`/enroll?invite=sfi_…`). The invite is resolved first: the page
+// names the user it enrolls (the username is the invite's fact, never
+// a choice), and a dead link is refused here instead of at the
+// ceremony. With `?done=1` it renders the confirmation.
 func (h *Handler) getEnroll(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	if r.URL.Query().Get("done") != "" {
@@ -196,7 +201,13 @@ func (h *Handler) getEnroll(w http.ResponseWriter, r *http.Request) {
 		h.renderError(w, http.StatusBadRequest, "this enrolment link is missing its invite")
 		return
 	}
-	if err := enrollTmpl.Execute(w, struct{ Invite string }{invite}); err != nil {
+	invited, _, err := h.Passkeys.Lifecycle.ValidateInvite(r.Context(), invite)
+	if err != nil {
+		h.renderError(w, http.StatusForbidden,
+			"this enrolment link is not valid — it may have expired or already been used; ask for a fresh invite")
+		return
+	}
+	if err := enrollTmpl.Execute(w, struct{ Invite, Username string }{invite, invited.Username}); err != nil {
 		http.Error(w, "render failed", http.StatusInternalServerError)
 	}
 }
@@ -279,9 +290,22 @@ func (h *Handler) getLogin(w http.ResponseWriter, r *http.Request) {
 		http.Redirect(w, r, h.Callback(ctx, id), http.StatusFound)
 		return
 	}
+	// An invite riding the OIDC flow is resolved the same way the
+	// standalone page does it: the username is the invite's fact.
+	invite := r.URL.Query().Get("invite")
+	var invitedName string
+	if invite != "" {
+		invited, _, err := h.Passkeys.Lifecycle.ValidateInvite(ctx, invite)
+		if err != nil {
+			h.renderError(w, http.StatusForbidden,
+				"this enrolment invite is not valid — it may have expired or already been used; ask for a fresh invite")
+			return
+		}
+		invitedName = invited.Username
+	}
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
-	if err := loginTmpl.Execute(w, struct{ AuthRequestID, CSRF, Invite string }{
-		id, sess.CSRF, r.URL.Query().Get("invite"),
+	if err := loginTmpl.Execute(w, struct{ AuthRequestID, CSRF, Invite, Username string }{
+		id, sess.CSRF, invite, invitedName,
 	}); err != nil {
 		h.renderError(w, http.StatusInternalServerError, "render failed")
 	}

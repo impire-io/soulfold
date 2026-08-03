@@ -205,7 +205,7 @@ func (a *API) mintInvite(w http.ResponseWriter, r *http.Request) {
 	}
 	writeJSON(w, http.StatusCreated, map[string]any{
 		"invite":     token,
-		"enroll_url": a.Issuer + "/login/?invite=" + token,
+		"enroll_url": a.Issuer + "/enroll?invite=" + token,
 	})
 }
 

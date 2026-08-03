@@ -91,6 +91,8 @@ label.field{display:flex;flex-direction:column;gap:5px;font:.66rem var(--mono);t
 input,textarea{background:#0b0e13;border:1px solid var(--line);border-radius:8px;color:var(--ink);
   padding:9px 11px;font:inherit;transition:border-color .15s,box-shadow .15s}
 input:focus,textarea:focus{outline:0;border-color:var(--a);box-shadow:0 0 0 3px color-mix(in srgb,var(--a) 18%,transparent)}
+input[readonly]{color:var(--dim);cursor:default}
+input[readonly]:focus{border-color:var(--line);box-shadow:none}
 input::placeholder{color:var(--faint)}
 .btn{font:600 .82rem var(--sans);border:0;border-radius:999px;padding:9px 18px;background:var(--a);color:#0b0e13;
   cursor:pointer;transition:filter .15s,transform .02s}

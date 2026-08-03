@@ -38,13 +38,29 @@ func TestStandaloneEnroll(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	// The bare enrol page renders (no OIDC request needed).
+	// The bare enrol page renders (no OIDC request needed), naming the
+	// invite's user in a read-only field — the username is the invite's
+	// fact, not the visitor's choice.
 	resp, err := http.Get(issuer + "/enroll?invite=" + invite)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if page := body(t, resp); !strings.Contains(page, "Enroll your passkey") {
+	page := body(t, resp)
+	if !strings.Contains(page, "Enroll your passkey") {
 		t.Fatalf("enrol page did not render:\n%s", page[:clip(200, len(page))])
+	}
+	if !strings.Contains(page, `value="dana" readonly`) {
+		t.Fatalf("enrol page did not pin the invited username read-only:\n%s", page[:clip(2000, len(page))])
+	}
+
+	// A dead link is refused at the page, not at the ceremony.
+	badResp, err := http.Get(issuer + "/enroll?invite=sfi_bogus")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if badPage := body(t, badResp); badResp.StatusCode != http.StatusForbidden ||
+		strings.Contains(badPage, "Enroll your passkey") {
+		t.Fatalf("a bogus invite rendered the enrol form (%d)", badResp.StatusCode)
 	}
 
 	// Drive the enrolment ceremony through the /enroll endpoints.

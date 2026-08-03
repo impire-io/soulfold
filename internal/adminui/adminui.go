@@ -219,7 +219,7 @@ func (c *Console) mintInvite(w http.ResponseWriter, r *http.Request, _ store.Bro
 		return
 	}
 	// The one response carrying a bearer — shown once, in the flash.
-	http.Redirect(w, r, "/admin/?invite="+url.QueryEscape(c.Issuer+"/login/?invite="+token)+
+	http.Redirect(w, r, "/admin/?invite="+url.QueryEscape(c.Issuer+"/enroll?invite="+token)+
 		"&msg="+url.QueryEscape("enrollment invite for "+username+" (single use, shown once)"), http.StatusSeeOther)
 }
 
