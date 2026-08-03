@@ -1,0 +1,50 @@
+version: 2
+
+project_name: soulfold
+
+builds:
+  - id: soulfold
+    main: ./cmd/soulfold
+    binary: soulfold
+    env:
+      - CGO_ENABLED=0
+    # No windows: the seal seed is born 0600 and a group- or
+    # world-readable seed is refused at load (D17 custody is
+    # load-bearing) — a windows binary would refuse at first start.
+    # Honest scope; revisit with a measured windows custody story.
+    goos: [linux, darwin]
+    goarch: [amd64, arm64]
+    ldflags:
+      - -s -w -X github.com/impire-io/soulfold/internal/version.Version={{.Version}}
+    mod_timestamp: "{{ .CommitTimestamp }}"
+
+# One archive per platform.
+archives:
+  - id: soulfold
+    ids: [soulfold]
+    name_template: "{{ .ProjectName }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
+    formats: [tar.gz]
+    files:
+      - README.md
+      - LICENSE
+
+checksum:
+  name_template: checksums.txt
+
+snapshot:
+  version_template: "{{ incpatch .Version }}-next"
+
+changelog:
+  sort: asc
+  filters:
+    exclude:
+      - "^docs"
+      - "^test"
+      - "^chore"
+
+release:
+  github:
+    owner: impire-io
+    name: soulfold
+  draft: false
+  prerelease: auto
