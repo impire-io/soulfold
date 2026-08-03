@@ -48,6 +48,7 @@ type foldArm struct {
 	cfg       oauth2.Config
 	users     map[string]*authtest.Authenticator // role -> enrolled passkey
 	usernames map[string]string                  // role -> username
+	invites   map[string]string                  // username -> unconsumed invite (M3)
 }
 
 // newFoldArm runs a real fold through its public embed seam (M5):
@@ -67,6 +68,7 @@ func newFoldArm(t *testing.T, roles ...string) *foldArm {
 	arm := &foldArm{
 		issuer: issuer,
 		users:  map[string]*authtest.Authenticator{}, usernames: map[string]string{},
+		invites: map[string]string{},
 	}
 	seedUsers := make([]embed.SeedUser, 0, len(roles))
 	for _, role := range roles {
@@ -93,7 +95,8 @@ func newFoldArm(t *testing.T, roles ...string) *foldArm {
 			SeedClients: []embed.SeedClient{
 				{ClientID: foldClientID, Name: "fleet", RedirectURIs: []string{redirectURI}},
 			},
-			Ready: func(string) { close(ready) },
+			InviteSink: func(username, token string) { arm.invites[username] = token },
+			Ready:      func(string) { close(ready) },
 		})
 	}()
 	select {
@@ -148,6 +151,10 @@ func (f *foldArm) TokenForRole(t *testing.T, role string) string {
 	csrf := extractAttr(t, string(page), "csrf")
 
 	q := url.Values{"authRequestID": {authReqID}, "csrf": {csrf}, "username": {f.usernames[role]}}
+	if invite, ok := f.invites[f.usernames[role]]; ok {
+		q.Set("invite", invite)
+		delete(f.invites, f.usernames[role]) // single use — like the browser it models
+	}
 	beginResp, err := httpc.Post(f.issuer+"/login/begin?"+q.Encode(), "", nil)
 	if err != nil {
 		t.Fatal(err)

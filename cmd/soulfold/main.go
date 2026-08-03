@@ -37,6 +37,8 @@ func run(args []string) error {
 		return cmdServe(args[1:])
 	case "seed":
 		return cmdSeed(args[1:])
+	case "invite":
+		return cmdInvite(args[1:])
 	default:
 		return usage()
 	}
@@ -44,11 +46,44 @@ func run(args []string) error {
 
 func usage() error {
 	fmt.Fprintln(os.Stderr, `usage:
-  soulfold serve --issuer URL --state-dir DIR [--listen ADDR] [--nats-url URL]
-  soulfold seed user   --state-dir DIR --username NAME [--display-name NAME] [--nats-url URL]
+  soulfold serve  --issuer URL --state-dir DIR [--listen ADDR] [--nats-url URL] [--token-audience AUD] [--enable-dcr]
+  soulfold seed user   --state-dir DIR --username NAME [--display-name NAME] [--roles A,B] [--nats-url URL]
   soulfold seed client --state-dir DIR --client-id ID --redirect-uri URI[,URI...] [--name NAME] [--nats-url URL]
+  soulfold invite --state-dir DIR --username NAME [--ttl 24h] [--nats-url URL]
   soulfold version`)
 	return fmt.Errorf("unknown or missing command")
+}
+
+// cmdInvite is the operator act (D22): possession of the deployment's
+// state mints an enrollment invite — the same trust that founded the
+// fold. The token prints once; the store keeps only its digest.
+func cmdInvite(args []string) error {
+	fs := flag.NewFlagSet("invite", flag.ExitOnError)
+	stateDir := fs.String("state-dir", "", "directory for the seal seed and the embedded store")
+	natsURL := fs.String("nats-url", "", "external JetStream server (default: embedded)")
+	username := fs.String("username", "", "user to invite")
+	ttl := fs.Duration("ttl", 0, "invite lifetime (default 24h)")
+	if err := fs.Parse(args); err != nil {
+		return err
+	}
+	if *username == "" {
+		return fmt.Errorf("invite: --username is required")
+	}
+	ctx := context.Background()
+	f, err := serve.Open(ctx, serve.Options{
+		Issuer: "http://127.0.0.1:0", Listen: "127.0.0.1:0",
+		StateDir: *stateDir, NATSURL: *natsURL,
+	})
+	if err != nil {
+		return err
+	}
+	defer f.Close()
+	token, err := f.Lifecycle.MintInvite(ctx, *username, *ttl)
+	if err != nil {
+		return err
+	}
+	fmt.Printf("invite for %s (single use, shown once):\n  %s\nenroll at: <issuer>/login/?invite=%s\n", *username, token, token)
+	return nil
 }
 
 // cmdServe runs the fold through the public embed seam — the daemon is

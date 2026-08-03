@@ -194,6 +194,16 @@ func BrowserSessionKey(id string) string { return "bs_" + id }
 // CeremonyKey namespaces in-flight WebAuthn ceremony records (M2).
 func CeremonyKey(id string) string { return "wa_" + id }
 
+// InviteKey digests an invite token for its record key (D12/D21:
+// bearer secrets never verbatim in the store).
+func InviteKey(token string) string {
+	sum := sha256.Sum256([]byte(token))
+	return "invite." + hex.EncodeToString(sum[:])[:32]
+}
+
+// GroupKey addresses a group record in the users bucket (M3).
+func GroupKey(name string) string { return "group." + name }
+
 // SigningKeyKey addresses a signing-key record; ActivePointerKey is the
 // CAS-flipped pointer (D7).
 func SigningKeyKey(kid string) string { return "key." + kid }

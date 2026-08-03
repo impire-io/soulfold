@@ -18,16 +18,19 @@ import (
 	"github.com/go-webauthn/webauthn/protocol"
 	"github.com/go-webauthn/webauthn/webauthn"
 
+	"github.com/impire-io/soulfold/internal/lifecycle"
 	"github.com/impire-io/soulfold/internal/store"
 )
 
 // CeremonyLifetime bounds an in-flight ceremony record.
 const CeremonyLifetime = 5 * time.Minute
 
-// Service runs the ceremonies against the store.
+// Service runs the ceremonies against the store; Lifecycle carries the
+// invite semantics enrollment rides on (D20).
 type Service struct {
-	St *store.Store
-	WA *webauthn.WebAuthn
+	St        *store.Store
+	WA        *webauthn.WebAuthn
+	Lifecycle *lifecycle.Service
 }
 
 // New configures the library from the issuer per D14: RP ID = the
@@ -41,7 +44,7 @@ func New(st *store.Store, issuer *url.URL) (*Service, error) {
 	if err != nil {
 		return nil, fmt.Errorf("passkeys: %w", err)
 	}
-	return &Service{St: st, WA: wa}, nil
+	return &Service{St: st, WA: wa, Lifecycle: &lifecycle.Service{St: st}}, nil
 }
 
 // waUser adapts the user record to the library's interface.
@@ -61,21 +64,35 @@ func (w *waUser) WebAuthnCredentials() []webauthn.Credential {
 	return out
 }
 
-// Begin starts the ceremony for username bound to authRequestID: a
-// registration when the user has no credential yet (first-touch
-// enrollment — the M2 stand-in for M3's bootstrap story, documented
-// loudly), a login otherwise. Returns the ceremony id and the options
-// JSON for navigator.credentials.
-func (s *Service) Begin(ctx context.Context, username, authRequestID string) (ceremonyID string, kind string, optionsJSON []byte, err error) {
+// Begin starts the ceremony for username bound to authRequestID. Since
+// M3 (D20) enrollment rights ride invites: a live invite for this user
+// makes the ceremony a registration (the first passkey, or another —
+// recovery is a fresh invite); no invite means a login assertion,
+// which a user without credentials cannot perform. There is no
+// open-enrollment lane — the refusal is structural.
+func (s *Service) Begin(ctx context.Context, username, authRequestID, inviteToken string) (ceremonyID string, kind string, optionsJSON []byte, err error) {
 	user, err := s.lookupActiveUser(ctx, username)
 	if err != nil {
 		return "", "", nil, err
+	}
+
+	var inviteKey string
+	if inviteToken != "" {
+		invited, key, err := s.Lifecycle.ValidateInvite(ctx, inviteToken)
+		if err != nil {
+			return "", "", nil, err
+		}
+		if invited.ID != user.ID {
+			return "", "", nil, errors.New("passkeys: the invite names a different user")
+		}
+		inviteKey = key
 	}
 	wu := &waUser{u: user}
 
 	var sessionData *webauthn.SessionData
 	var options any
-	if len(user.Credentials) == 0 {
+	switch {
+	case inviteKey != "":
 		creation, sd, err := s.WA.BeginRegistration(wu,
 			webauthn.WithAuthenticatorSelection(protocol.AuthenticatorSelection{
 				ResidentKey:      protocol.ResidentKeyRequirementPreferred,
@@ -87,13 +104,15 @@ func (s *Service) Begin(ctx context.Context, username, authRequestID string) (ce
 			return "", "", nil, fmt.Errorf("passkeys: begin registration: %w", err)
 		}
 		sessionData, options, kind = sd, creation, "register"
-	} else {
+	case len(user.Credentials) > 0:
 		assertion, sd, err := s.WA.BeginLogin(wu,
 			webauthn.WithUserVerification(protocol.VerificationRequired))
 		if err != nil {
 			return "", "", nil, fmt.Errorf("passkeys: begin login: %w", err)
 		}
 		sessionData, options, kind = sd, assertion, "login"
+	default:
+		return "", "", nil, lifecycle.ErrEnrollmentNeedsInvite
 	}
 
 	sdJSON, err := json.Marshal(sessionData)
@@ -104,9 +123,9 @@ func (s *Service) Begin(ctx context.Context, username, authRequestID string) (ce
 	rec := store.Ceremony{
 		Schema: 1, ID: store.RandID(16), Kind: kind,
 		UserID: user.ID, AuthRequestID: authRequestID,
-		SessionData: sdJSON,
-		CreatedAt:   now.Format(time.RFC3339),
-		ExpiresAt:   now.Add(CeremonyLifetime).Format(time.RFC3339),
+		SessionData: sdJSON, InviteKey: inviteKey,
+		CreatedAt: now.Format(time.RFC3339),
+		ExpiresAt: now.Add(CeremonyLifetime).Format(time.RFC3339),
 	}
 	if _, err := s.St.Create(ctx, s.St.Sessions, store.CeremonyKey(rec.ID), rec); err != nil {
 		return "", "", nil, err
@@ -144,6 +163,16 @@ func (s *Service) Finish(ctx context.Context, ceremonyID string, r *http.Request
 	var credential *webauthn.Credential
 	switch cer.Kind {
 	case "register":
+		// The invite is consumed FIRST (D21): in a race the CAS loser is
+		// refused before any credential binds — single use is structural.
+		// A ceremony that then fails burns its invite; the recovery is a
+		// fresh invite, never a reusable one.
+		if cer.InviteKey == "" {
+			return store.User{}, "", lifecycle.ErrEnrollmentNeedsInvite
+		}
+		if err := s.Lifecycle.ConsumeInviteKey(ctx, cer.InviteKey); err != nil {
+			return store.User{}, "", err
+		}
 		credential, err = s.WA.FinishRegistration(wu, sd, r)
 	case "login":
 		credential, err = s.WA.FinishLogin(wu, sd, r)

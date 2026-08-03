@@ -16,6 +16,7 @@ import (
 	"github.com/zitadel/oidc/v3/pkg/op"
 
 	"github.com/impire-io/soulfold/internal/keys"
+	"github.com/impire-io/soulfold/internal/lifecycle"
 	"github.com/impire-io/soulfold/internal/store"
 )
 
@@ -240,8 +241,8 @@ func (s *storage) GetPrivateClaimsFromScopes(ctx context.Context, userID, _ stri
 		"oid":                user.ID,
 		"preferred_username": user.Username,
 	}
-	if len(user.Roles) > 0 {
-		claims["roles"] = user.Roles
+	if roles := lifecycle.RolesOf(user); len(roles) > 0 {
+		claims["roles"] = roles
 	}
 	return claims, nil
 }

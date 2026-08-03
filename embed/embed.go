@@ -44,21 +44,27 @@ type Options struct {
 	// hosted MCP clients expect of an authorization server.
 	EnableDCR bool
 
-	// SeedUsers and SeedClients are the M1-era stand-ins for the M3
-	// lifecycle: records created at startup when absent, so an
-	// embedding distribution can found its first user and client in
-	// the same act that starts the fold. Existing records are left
-	// untouched.
+	// SeedUsers and SeedClients found the fold's first records at
+	// startup when absent (idempotent; existing records untouched).
+	// Since M3, seeding grants existence, never enrollment: a seeded
+	// user signs in only after an invite enrolls their passkey (D20).
 	SeedUsers   []SeedUser
 	SeedClients []SeedClient
+
+	// InviteSink, when non-nil, receives a freshly minted single-use
+	// enrollment invite for every seeded user who has no credential
+	// and no live invite yet — the embedding parent owns its custody
+	// (print once, hand out-of-band; never log it). The bearer exists
+	// nowhere else: the store keeps only its digest (D21).
+	InviteSink func(username, token string)
 
 	// Ready, when non-nil, receives the bound listen address once the
 	// fold serves (tests and parents that need the real port).
 	Ready func(addr string)
 }
 
-// SeedUser is a user stand-in (M3 replaces seeding with the lifecycle).
-// Roles surface as the user's tokens' roles-claim values.
+// SeedUser is a founding user. Roles are group memberships (M3): the
+// names surface as the user's tokens' roles-claim values.
 type SeedUser struct {
 	Username    string
 	DisplayName string
@@ -88,6 +94,28 @@ func Run(ctx context.Context, o Options) error {
 			if !isExists(err) {
 				f.Close()
 				return fmt.Errorf("embed: seed user %s: %w", u.Username, err)
+			}
+		}
+		if o.InviteSink != nil {
+			user, err := f.Lifecycle.UserByName(ctx, u.Username)
+			if err != nil {
+				f.Close()
+				return fmt.Errorf("embed: seed user %s: %w", u.Username, err)
+			}
+			if len(user.Credentials) == 0 {
+				live, err := f.Lifecycle.HasLiveInvite(ctx, user.ID)
+				if err != nil {
+					f.Close()
+					return fmt.Errorf("embed: invite check for %s: %w", u.Username, err)
+				}
+				if !live {
+					token, err := f.Lifecycle.MintInvite(ctx, u.Username, 0)
+					if err != nil {
+						f.Close()
+						return fmt.Errorf("embed: mint invite for %s: %w", u.Username, err)
+					}
+					o.InviteSink(u.Username, token)
+				}
 			}
 		}
 	}
