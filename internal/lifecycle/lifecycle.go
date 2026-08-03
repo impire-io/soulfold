@@ -56,10 +56,15 @@ func (s *Service) CreateUser(ctx context.Context, username, displayName string, 
 		DisplayName: displayName, Status: "active", Groups: groups,
 		CreatedAt: now, UpdatedAt: now,
 	}
-	if _, err := s.St.Create(ctx, s.St.Users, u.ID, u); err != nil {
+	// The username index is the uniqueness guard, so it is written FIRST:
+	// a taken username fails here before any user record exists (Create
+	// has no cross-key transaction, D4). Writing the record first would
+	// orphan it on a duplicate — an idempotent re-seed then leaves two
+	// user records behind the one index.
+	if _, err := s.St.Create(ctx, s.St.Users, store.UsernameIndexKey(username), store.Index{Schema: 1, Target: u.ID}); err != nil {
 		return store.User{}, err
 	}
-	if _, err := s.St.Create(ctx, s.St.Users, store.UsernameIndexKey(username), store.Index{Schema: 1, Target: u.ID}); err != nil {
+	if _, err := s.St.Create(ctx, s.St.Users, u.ID, u); err != nil {
 		return store.User{}, err
 	}
 	return u, nil
