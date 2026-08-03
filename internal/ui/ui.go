@@ -19,23 +19,30 @@ import (
 	"github.com/impire-io/soulfold/internal/passkeys"
 	"github.com/impire-io/soulfold/internal/store"
 	"github.com/impire-io/soulfold/internal/websession"
+	"github.com/impire-io/soulfold/internal/webstyle"
 )
 
 var (
 	// The login page: a username field and the ceremony driver. The
 	// script is page-local and exists because navigator.credentials is
 	// unreachable without it (D9's stated exception).
-	loginTmpl = template.Must(template.New("login").Parse(`<!doctype html>
-<meta charset="utf-8"><title>sign in — soulfold</title>
-<main><h1>{{if .Invite}}Enroll your passkey{{else}}Sign in{{end}}</h1>
+	loginTmpl = template.Must(template.New("login").Parse(
+		webstyle.Head("sign in — soulfold") + `<body><main><div class="center">
+<div class="bar"><a class="brand" href="#"><span class="dot"></span><b>soulfold</b></a></div>
+<div class="card">
+<h1>{{if .Invite}}Enroll your passkey{{else}}Sign in{{end}}</h1>
+<p class="lede">{{if .Invite}}Choose a username and create a passkey — the only credential you'll ever need here.{{else}}Sign in with your passkey.{{end}}</p>
 <form id="f">
 <input type="hidden" id="authRequestID" value="{{.AuthRequestID}}">
 <input type="hidden" id="csrf" value="{{.CSRF}}">
 <input type="hidden" id="invite" value="{{.Invite}}">
-<label>Username <input id="username" autocomplete="username webauthn" autofocus required></label>
-<button type="submit">{{if .Invite}}Enroll and sign in{{else}}Sign in with a passkey{{end}}</button>
+<label class="field">Username <input id="username" autocomplete="username webauthn" autofocus required></label>
+<button class="btn" type="submit">{{if .Invite}}Enroll and sign in{{else}}Sign in with a passkey{{end}}</button>
 </form>
-<p id="msg"></p>
+<p id="msg" class="msg"></p>
+</div>
+<p class="foot">soulfold · the door of the soulsystem</p>
+</div></main>
 <script>
 const b64u = {
   dec: s => Uint8Array.from(atob(s.replace(/-/g,'+').replace(/_/g,'/')), c => c.charCodeAt(0)),
@@ -80,24 +87,31 @@ document.getElementById('f').addEventListener('submit', async ev => {
     window.location = (await fin.json()).redirect;
   } catch (e) { msg.textContent = 'Sign-in failed: ' + e.message; }
 });
-</script></main>`))
+</script></body></html>`))
 
-	errorTmpl = template.Must(template.New("error").Parse(`<!doctype html>
-<meta charset="utf-8"><title>error — soulfold</title>
-<main><h1>Sign-in failed</h1><p>{{.Message}}</p></main>`))
+	errorTmpl = template.Must(template.New("error").Parse(
+		webstyle.Head("error — soulfold") + `<body><main><div class="center">
+<div class="bar"><a class="brand" href="#"><span class="dot"></span><b>soulfold</b></a></div>
+<div class="card"><h1>Sign-in failed</h1><p class="lede">{{.Message}}</p></div>
+</div></main></body></html>`))
 
 	// The standalone enrolment page an invite link points at directly:
 	// register a passkey against the invite, no relying party involved.
-	enrollTmpl = template.Must(template.New("enroll").Parse(`<!doctype html>
-<meta charset="utf-8"><title>enroll a passkey — soulfold</title>
-<main><h1>Enroll your passkey</h1>
-<p>Choose a username and create a passkey — this is the only credential you will ever need here.</p>
+	enrollTmpl = template.Must(template.New("enroll").Parse(
+		webstyle.Head("enroll a passkey — soulfold") + `<body><main><div class="center">
+<div class="bar"><a class="brand" href="#"><span class="dot"></span><b>soulfold</b></a></div>
+<div class="card">
+<h1>Enroll your passkey</h1>
+<p class="lede">Choose a username and create a passkey — the only credential you'll ever need here.</p>
 <form id="f">
 <input type="hidden" id="invite" value="{{.Invite}}">
-<label>Username <input id="username" autocomplete="username webauthn" autofocus required></label>
-<button type="submit">Create passkey</button>
+<label class="field">Username <input id="username" autocomplete="username webauthn" autofocus required></label>
+<button class="btn" type="submit">Create passkey</button>
 </form>
-<p id="msg"></p>
+<p id="msg" class="msg"></p>
+</div>
+<p class="foot">soulfold · the door of the soulsystem</p>
+</div></main>
 <script>
 const b64u = {
   dec: s => Uint8Array.from(atob(s.replace(/-/g,'+').replace(/_/g,'/')), c => c.charCodeAt(0)),
@@ -130,13 +144,18 @@ document.getElementById('f').addEventListener('submit', async ev => {
     window.location = (await fin.json()).redirect;
   } catch (e) { msg.textContent = 'Enrolment failed: ' + e.message; }
 });
-</script></main>`))
+</script></body></html>`))
 
-	enrollDoneTmpl = template.Must(template.New("enrolldone").Parse(`<!doctype html>
-<meta charset="utf-8"><title>enrolled — soulfold</title>
-<main><h1>Your passkey is enrolled.</h1>
-<p>You can now sign in with it wherever this identity provider is used.
-Administrators can open the <a href="/admin">admin console</a>.</p></main>`))
+	enrollDoneTmpl = template.Must(template.New("enrolldone").Parse(
+		webstyle.Head("enrolled — soulfold") + `<body><main><div class="center">
+<div class="bar"><a class="brand" href="#"><span class="dot"></span><b>soulfold</b></a></div>
+<div class="card">
+<h1>Your passkey is enrolled.</h1>
+<p class="lede">You can now sign in with it wherever this identity provider is used.
+Administrators can open the <a href="/admin">admin console</a>.</p>
+</div>
+<p class="foot">soulfold · the door of the soulsystem</p>
+</div></main></body></html>`))
 )
 
 // Handler serves the sign-in surface against the store. Callback is

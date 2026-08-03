@@ -132,13 +132,14 @@ func (c *Console) dashboard(w http.ResponseWriter, r *http.Request) {
 	}
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	if err := dashTmpl.Execute(w, map[string]any{
-		"Admin":   admin.Username,
-		"CSRF":    bs.CSRF,
-		"Msg":     r.URL.Query().Get("msg"),
-		"Invite":  r.URL.Query().Get("invite"),
-		"Users":   rows,
-		"Groups":  strings.Join(groupNames, " "),
-		"Clients": clients,
+		"Admin":     admin.Username,
+		"CSRF":      bs.CSRF,
+		"Msg":       r.URL.Query().Get("msg"),
+		"Invite":    r.URL.Query().Get("invite"),
+		"Users":     rows,
+		"Groups":    strings.Join(groupNames, " "),
+		"GroupList": groupNames,
+		"Clients":   clients,
 	}); err != nil {
 		http.Error(w, "render failed", http.StatusInternalServerError)
 	}
