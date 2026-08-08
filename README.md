@@ -29,4 +29,9 @@ Why the fold exists as a sibling of
 [soulidentity](https://github.com/impire-io/soulidentity) rather than
 inside it: [`../soul-hq/04-JOURNEY/0041-soulfold-genesis-the-fold.md`](../soul-hq/04-JOURNEY/0041-soulfold-genesis-the-fold.md).
 
-Module `github.com/impire-io/soulfold`, Go 1.26. MIT licensed.
+Module `github.com/impire-io/soulfold`, Go 1.26.
+[Fair-code](https://faircode.io) licensed under the
+[Sustainable Use License](LICENSE) — free to self-host and modify; offering it
+to others as a paid product or service requires an agreement — see
+[impire.io/license](https://impire.io/license/). Versions released before this
+change remain MIT.
